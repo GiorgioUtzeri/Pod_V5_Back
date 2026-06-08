@@ -20,6 +20,7 @@ services:
       - pod-network
 
   api:
+    user: "${UID:-1000}:${GID:-1000}"
     build:
       context: ../../
       dockerfile: deployment/dev/Dockerfile
@@ -62,6 +63,7 @@ services:
       - pod-network
 
   celery:
+    user: "${UID:-1000}:${GID:-1000}"
     build:
       context: ../../
       dockerfile: deployment/dev/Dockerfile
