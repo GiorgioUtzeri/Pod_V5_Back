@@ -3,18 +3,21 @@ Esup-Pod - Video viewset.
 """
 
 import os
-import logging
 import hashlib
+import logging
 
-from rest_framework.response import Response
-from rest_framework import viewsets, permissions, parsers, filters
 from django.db.models import Q, F
-from django.conf import settings
-from django.contrib.sites.shortcuts import get_current_site
-from django.utils.translation import gettext_lazy as _
 from django.http import FileResponse, Http404
+from django.utils.translation import gettext_lazy as _
+from django.contrib.sites.shortcuts import get_current_site
+from django.conf import settings
+
+from rest_framework import viewsets, permissions, parsers, filters, status
 from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
+
+from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.hashers import check_password
 from drf_spectacular.utils import extend_schema
 
@@ -22,9 +25,11 @@ from src.apps.video.models import Video
 from src.apps.video.serializers import VideoSerializer
 from src.apps.video.permissions import IsOwnerOrCoOwnerOrChannelCollaborator
 from src.apps.authentication.permissions import IsSuperUser
-from django_filters.rest_framework import DjangoFilterBackend
 from src.apps.video.conf import video_settings
 from src.apps.encoding.conf import encoding_settings
+
+from src.apps.video.services.duplicate import duplicate_video
+
 
 logger = logging.getLogger(__name__)
 
@@ -393,3 +398,13 @@ class VideoViewSet(viewsets.ModelViewSet):
         video.save(update_fields=["owner"])
 
         return Response({"status": "ownership transferred"})
+
+    def duplicate(self, request, slug=None):
+        original = self.get_object()
+        print(video_settings.use_duplicate)
+
+        duplicated = duplicate_video(original, request.user)
+
+        serializer = self.get_serializer(duplicated)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    

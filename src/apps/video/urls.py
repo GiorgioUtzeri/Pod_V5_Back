@@ -23,6 +23,15 @@ router.register(r"types", TypeViewSet, basename="type")
 
 urlpatterns = router.urls
 
+if video_settings.use_duplicate:
+    urlpatterns += [
+        path(
+            "videos/<slug:slug>/duplicate/",
+            VideoViewSet.as_view({"post": "duplicate"}),
+            name="video-duplicate",
+        ),
+    ]
+
 if video_settings.active_video_comment:
     urlpatterns += [
         path(
