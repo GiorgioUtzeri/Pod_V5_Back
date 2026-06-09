@@ -11,12 +11,14 @@ from src.apps.video.views import (
     DisciplineViewSet,
     TagViewSet,
     TypeViewSet,
+    VideoHyperlinkViewSet,
 )
 from src.apps.video.conf import video_settings
 
 router = SimpleRouter()
 router.register(r"videos", VideoViewSet, basename="video")
 router.register(r"subtitles", SubtitleViewSet, basename="subtitle")
+router.register(r"video-hyperlinks", VideoHyperlinkViewSet, basename="video-hyperlink")
 router.register(r"disciplines", DisciplineViewSet, basename="discipline")
 router.register(r"tags", TagViewSet, basename="tag")
 router.register(r"types", TypeViewSet, basename="type")

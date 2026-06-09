@@ -9,5 +9,15 @@ from .Comment import Comment
 from .Vote import Vote
 from .Type import Type
 from .Discipline import Discipline
+from .Hyperlink import VideoHyperlink
 
-__all__ = ["Video", "Subtitle", "ViewCount", "Comment", "Vote", "Type", "Discipline"]
+__all__ = [
+    "Video",
+    "Subtitle",
+    "ViewCount",
+    "Comment",
+    "Vote",
+    "Type",
+    "Discipline",
+    "VideoHyperlink",
+]

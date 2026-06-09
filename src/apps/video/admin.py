@@ -3,7 +3,15 @@ Esup-Pod - Video administrator interface.
 """
 
 from django.contrib import admin
-from src.apps.video.models import Video, Type, Discipline, Subtitle
+from src.apps.video.models import Video, Type, Discipline, Subtitle, VideoHyperlink
+
+
+class VideoHyperlinkInline(admin.TabularInline):
+    """Inline admin for VideoHyperlink inside Video."""
+
+    model = VideoHyperlink
+    extra = 1
+    fields = ("url", "text", "icon", "position", "time_start", "time_end")
 
 
 @admin.register(Video)
@@ -51,3 +59,13 @@ class SubtitleAdmin(admin.ModelAdmin):
 
     list_display = ("video", "language", "file")
     list_filter = ("language",)
+
+
+@admin.register(VideoHyperlink)
+class VideoHyperlinkAdmin(admin.ModelAdmin):
+    """Admin for VideoHyperlink."""
+
+    list_display = ("video", "text", "url", "time_start", "time_end")
+    list_filter = ("video",)
+    search_fields = ("text", "url", "video__title")
+    readonly_fields = ("created_at", "updated_at")
