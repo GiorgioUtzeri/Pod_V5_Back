@@ -25,22 +25,25 @@ router.register(r"types", TypeViewSet, basename="type")
 urlpatterns = router.urls
 
 if video_settings.use_hyperlinks:
-
     router.register(r"video-hyperlinks", VideoHyperlinkViewSet, basename="video-hyperlink")
+
+urlpatterns = router.urls
+
+if video_settings.use_hyperlinks:
 
     urlpatterns += [
         path(
-            "video/<slug:video_slug>/hyperlinks/",
+            "hyperlink/<slug:video_slug>/hyperlinks/",
             VideoHyperlinkViewSet.as_view({"get": "list_hyperlinks"}),
             name="video-hyperlink-list",
         ),
         path(
-            "video/<slug:video_slug>/hyperlinks/add/",
+            "hyperlink/<slug:video_slug>/hyperlinks/add/",
             VideoHyperlinkViewSet.as_view({"post": "add_hyperlink"}),
             name="video-hyperlink-add",
         ),
         path(
-            "video/<slug:video_slug>/hyperlinks/<int:hyperlink_id>/",
+            "hyperlink/<slug:video_slug>/hyperlinks/<int:hyperlink_id>/",
             VideoHyperlinkViewSet.as_view({"delete": "delete_hyperlink"}),
             name="video-hyperlink-delete",
         ),
