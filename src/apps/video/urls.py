@@ -25,7 +25,9 @@ router.register(r"types", TypeViewSet, basename="type")
 urlpatterns = router.urls
 
 if video_settings.use_hyperlinks:
-    router.register(r"video-hyperlinks", VideoHyperlinkViewSet, basename="video-hyperlink")
+    router.register(
+        r"video-hyperlinks", VideoHyperlinkViewSet, basename="video-hyperlink"
+    )
 
 urlpatterns = router.urls
 

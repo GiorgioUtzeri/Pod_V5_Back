@@ -65,7 +65,7 @@ class SubtitleAdmin(admin.ModelAdmin):
 class VideoHyperlinkAdmin(admin.ModelAdmin):
     """Admin for VideoHyperlink."""
 
-    list_display = ("id","video", "text", "url", "time_start", "time_end","created_at")
+    list_display = ("id", "video", "text", "url", "time_start", "time_end", "created_at")
     list_filter = ("video",)
     search_fields = ("text", "url", "video__title")
-    readonly_fields = ("id","created_at", "updated_at")
+    readonly_fields = ("id", "created_at", "updated_at")
