@@ -7,7 +7,7 @@ import hashlib
 import logging
 
 from django.db.models import Q, F
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404 
 from django.utils.translation import gettext_lazy as _
 from django.contrib.sites.shortcuts import get_current_site
 from django.conf import settings
@@ -15,7 +15,7 @@ from django.conf import settings
 from rest_framework import viewsets, permissions, parsers, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.hashers import check_password
@@ -29,6 +29,7 @@ from src.apps.video.conf import video_settings
 from src.apps.encoding.conf import encoding_settings
 
 from src.apps.video.services.duplicate import duplicate_video
+from django.shortcuts import get_object_or_404
 
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,10 @@ class VideoViewSet(viewsets.ModelViewSet):
                     self.check_object_permissions(self.request, obj)
                     return obj
 
-        return super().get_object()
+        try:
+            return super().get_object()
+        except Http404:
+            raise NotFound(_("Video not found."))
 
     def _apply_query_filters(self, qs):
         """Helper to apply GET query parameters filters."""
@@ -399,12 +403,34 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return Response({"status": "ownership transferred"})
 
+    @extend_schema(summary="Duplicate a video",description="Creates a full duplicate of a video. The title is automatically set to 'Copy of <original title>'.",request=None,responses={201: VideoSerializer},)
+    @action(detail=True,methods=["post"],permission_classes=[permissions.IsAuthenticated],)
     def duplicate(self, request, slug=None):
-        original = self.get_object()
-        print(video_settings.use_duplicate)
+        """
+        Creates a full duplicate of a video, including file copy and M2M relations.
+        Restricted to the video owner, co-owners, and superusers.
+        Only available when USE_DUPLICATE is enabled in settings.
+        """
+        original = self.get_object()  # déclenche IsOwnerOrCoOwnerOrChannelCollaborator
+
+        if not video_settings.allow_authenticated_upload and not request.user.is_staff:
+            raise PermissionDenied(_("You are not allowed to duplicate videos."))
+
+        if video_settings.restrict_edit_to_staff and not request.user.is_staff:
+            raise PermissionDenied(_("Only staff members are allowed to duplicate videos."))
+
+        # Vérification quota avant copie physique du fichier
+        if original.video_file:
+            user_videos = Video.objects.filter(owner=request.user).exclude(video_file="")
+            total_bytes = sum(v.video_file.size for v in user_videos if v.video_file)
+            max_quota_bytes = encoding_settings.user_quota_size_gb * 1024 * 1024 * 1024
+
+            if total_bytes + original.video_file.size > max_quota_bytes:
+                raise ValidationError(
+                    {"detail": _("Quota exceeded. Cannot duplicate this video.")}
+                )
 
         duplicated = duplicate_video(original, request.user)
-
         serializer = self.get_serializer(duplicated)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     
