@@ -29,6 +29,7 @@ from src.apps.video.conf import video_settings
 from src.apps.encoding.conf import encoding_settings
 
 from src.apps.video.services.duplicate import duplicate_video
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +129,16 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return Video.objects.visible_for(user).filter(id__in=qs).distinct()
 
+    @transaction.atomic
     def perform_create(self, serializer):
         """Creates a new video, checking user quota and triggering encoding."""
+
         user_videos = Video.objects.filter(owner=self.request.user).exclude(video_file="")
         total_bytes = sum(v.video_file.size for v in user_videos if v.video_file)
+
         incoming_file = self.request.FILES.get("video_file")
         incoming_size = incoming_file.size if incoming_file else 0
+
         max_quota_bytes = encoding_settings.user_quota_size_gb * 1024 * 1024 * 1024
 
         if total_bytes + incoming_size > max_quota_bytes:
@@ -159,14 +164,17 @@ class VideoViewSet(viewsets.ModelViewSet):
             owner=self.request.user,
             status=Video.Status.DRAFT,
             type=video_type,
-            license=(
-                provided_license if provided_license else video_settings.default_license
-            ),
+            license=provided_license or video_settings.default_license,
         )
 
-        current_site = get_current_site(self.request)
-        video.sites.add(current_site)
+        # ---- SITE ENFORCEMENT (IMPORTANT PART) ----
+        site = get_current_site(self.request)
+        if not site:
+            raise ValidationError({"sites": "Site could not be resolved."})
 
+        video.sites.set([site])
+
+        # ---- ENCODING TRIGGER ----
         if video.video_file:
             from src.apps.encoding.tasks import trigger_runner_encoding_task
 

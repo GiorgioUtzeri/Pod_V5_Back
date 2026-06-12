@@ -4,6 +4,7 @@ Esup-Pod - Video administrator interface.
 
 from django.contrib import admin
 from src.apps.video.models import Video, Type, Discipline, Subtitle
+from django.contrib.sites.shortcuts import get_current_site
 
 
 @admin.register(Video)
@@ -51,3 +52,13 @@ class SubtitleAdmin(admin.ModelAdmin):
 
     list_display = ("video", "language", "file")
     list_filter = ("language",)
+
+
+def save_model(self, request, obj, form, change):
+    """
+    Ensures a default site is assigned when creating a video in admin.
+    """
+    super().save_model(request, obj, form, change)
+
+    if not obj.sites.exists():
+        obj.sites.set([get_current_site(request)])

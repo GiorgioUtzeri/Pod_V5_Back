@@ -98,6 +98,7 @@ class Video(models.Model):
         max_length=250,
         help_text=_("A title as short and accurate as possible."),
     )
+
     slug = models.SlugField(
         _("Slug"),
         unique=True,
@@ -105,9 +106,13 @@ class Video(models.Model):
         editable=False,
         help_text=_("URL friendly identifier."),
     )
+
     description = models.TextField(
-        _("Description"), blank=True, help_text=_("Full description of the content.")
+        _("Description"),
+        blank=True,
+        help_text=_("Full description of the content."),
     )
+
     video_file = models.FileField(
         _("Video File"),
         upload_to=get_storage_path_video,
@@ -115,6 +120,7 @@ class Video(models.Model):
         null=True,
         blank=True,
     )
+
     is_video = models.BooleanField(
         _("Is Video"),
         default=True,
@@ -130,6 +136,7 @@ class Video(models.Model):
         blank=True,
         help_text=_("Custom cover image for the video."),
     )
+
     overview = models.ImageField(
         _("Overview"),
         upload_to=get_storage_path_image,
@@ -138,13 +145,16 @@ class Video(models.Model):
         editable=False,
         help_text=_("Automatically generated image from the video."),
     )
+
     duration = models.IntegerField(_("Duration (s)"), default=0, editable=False)
     view_count = models.PositiveIntegerField(_("View Count"), default=0, editable=False)
+
     is_360 = models.BooleanField(
         _("360° Video"),
         default=False,
         help_text=_("Check if this is a 360-degree immersive video."),
     )
+
     # 4. OWNERSHIP & ACCESS
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -152,6 +162,7 @@ class Video(models.Model):
         on_delete=models.CASCADE,
         verbose_name=_("Owner"),
     )
+
     channel = models.ForeignKey(
         "collection.Channel",
         on_delete=models.SET_NULL,
@@ -161,6 +172,7 @@ class Video(models.Model):
         verbose_name=_("Channel"),
         help_text=_("The channel this video belongs to."),
     )
+
     co_owners = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name="co_owned_videos",
@@ -168,6 +180,7 @@ class Video(models.Model):
         verbose_name=_("Co-Owners"),
         help_text=_("Users with edit rights on this video."),
     )
+
     status = models.CharField(
         _("Status"),
         max_length=2,
@@ -175,6 +188,7 @@ class Video(models.Model):
         default=Status.DRAFT,
         db_index=True,
     )
+
     encoding_status = models.CharField(
         _("Encoding Status"),
         max_length=2,
@@ -185,6 +199,7 @@ class Video(models.Model):
             "Tracks the encoding pipeline state independently from the video’s visibility."
         ),
     )
+
     is_auth_required = models.BooleanField(
         _("Authentication Required"),
         default=False,
@@ -192,14 +207,16 @@ class Video(models.Model):
             "If checked, users must be logged in to access this video (even if they have the password)."
         ),
     )
+
     # 4. ACCESS CONTROL
     sites = models.ManyToManyField(
         Site,
-        blank=True,
+        blank=False,
         related_name="videos",
         verbose_name=_("Sites"),
         help_text=_("Portals where this video will be published."),
     )
+
     password = models.CharField(
         _("Password"),
         max_length=128,
@@ -214,11 +231,13 @@ class Video(models.Model):
         default=False,
         help_text=_("Allow users to download the source file."),
     )
+
     disable_comment = models.BooleanField(
         _("Disable Comments"),
         default=False,
         help_text=_("Prevent users from commenting on this specific content."),
     )
+
     order = models.PositiveSmallIntegerField(
         _("Order"),
         default=1,
@@ -226,10 +245,12 @@ class Video(models.Model):
         null=True,
         help_text=_("Order priority in channels or playlists."),
     )
+
     # 6.CONTENT DESCRIPTION & CLASSIFICATION
     date_of_event = models.DateField(
         _("Date of Event"), default=date.today, blank=True, null=True
     )
+
     license = models.CharField(
         _("License"),
         max_length=20,
@@ -238,6 +259,7 @@ class Video(models.Model):
         blank=True,
         null=True,
     )
+
     cursus = models.CharField(
         _("Cursus"),
         max_length=10,
@@ -245,18 +267,21 @@ class Video(models.Model):
         default=Cursus.OTHER,
         blank=True,
     )
+
     language = models.CharField(
         _("Main Language"),
         max_length=10,
         default=settings.LANGUAGE_CODE,
         help_text=_("Language spoken in the video (e.g. 'fr', 'en')."),
     )
+
     transcript_language = models.CharField(
         _("Transcript Language"),
         max_length=10,
         blank=True,
         help_text=_("Language of the available audio transcription."),
     )
+
     restricted_groups = models.ManyToManyField(
         "authentication.AccessGroup",
         blank=True,
@@ -264,6 +289,7 @@ class Video(models.Model):
         verbose_name=_("Restricted Groups"),
         help_text=_("One or more groups who can access this video."),
     )
+
     type = models.ForeignKey(
         "video.Type",
         on_delete=models.SET_NULL,
@@ -271,10 +297,11 @@ class Video(models.Model):
         verbose_name=_("Type"),
         help_text=_("The general format of the video."),
     )
-    # [TODO] themes = models.ManyToManyField("video.Theme", blank=True)
+
     disciplines = models.ManyToManyField(
         "video.Discipline", blank=True, verbose_name=_("Disciplines")
     )
+
     tags = tagulous.models.TagField(
         blank=True, help_text=_("A comma-separated list of tags.")
     )
@@ -282,6 +309,7 @@ class Video(models.Model):
     # 7. TIMESTAMPS
     created_at = models.DateTimeField(_("Created At"), default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
     date_to_delete = models.DateField(
         _("Expiration Date"),
         null=True,
@@ -379,9 +407,5 @@ class Video(models.Model):
         """
         Returns the V4-compatible permalink.
         Format: /video/<slug>/ where slug is already "0042-my-video-title".
-
-        previously this returned f"/video/{self.pk}-{self.slug}/" which
-        produced a double-ID like /video/42-0042-titre/. The slug already embeds
-        the zero-padded ID, so only the slug is needed here.
         """
         return f"/video/{self.slug}/"

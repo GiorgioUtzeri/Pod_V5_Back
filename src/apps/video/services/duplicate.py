@@ -7,10 +7,11 @@ from django.utils.text import slugify
 from src.apps.video.models import Video
 from .slug import generate_unique_slug
 from .files import duplicate_source_file
+from src.apps.video.services.sites import assign_default_site
 
 
 @transaction.atomic
-def duplicate_video(original: Video, user):
+def duplicate_video(original: Video, user, request=None):
     """
     Duplicates a Video instance for the given user.
 
@@ -18,12 +19,12 @@ def duplicate_video(original: Video, user):
     the source file physically duplicated on disk, and all M2M relations
     (disciplines, restricted_groups, co_owners) mirrored.
     """
-    base_slug = slugify(f"{original.slug}-copy")
-    new_slug = generate_unique_slug(base_slug)
+
+    base_slug = f"{original.slug}-copy"
+    new_slug = generate_unique_slug(slugify(base_slug))
 
     duplicated = Video.objects.create(
         title=f"Copy of {original.title}",
-        video_file=original.video_file,
         slug=new_slug,
         type=original.type,
         owner=user,
@@ -40,7 +41,13 @@ def duplicate_video(original: Video, user):
         status=Video.Status.DRAFT,
     )
 
-    # FILE COPY
+    if original.sites.exists():
+        duplicated.sites.set(original.sites.all())
+    elif request:
+        assign_default_site(duplicated, request)
+    else:
+        raise ValueError("Video must have at least one site")
+
     if original.video_file:
         duplicated.video_file.name = duplicate_source_file(
             duplicated.id,
@@ -49,13 +56,8 @@ def duplicate_video(original: Video, user):
         )
         duplicated.save(update_fields=["video_file"])
 
-    # M2M
     duplicated.disciplines.set(original.disciplines.all())
     duplicated.restricted_groups.set(original.restricted_groups.all())
     duplicated.co_owners.set(original.co_owners.all())
-
-    if original.channel:
-        duplicated.channel = original.channel
-        duplicated.save(update_fields=["channel"])
 
     return duplicated
