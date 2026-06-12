@@ -7,7 +7,7 @@ import hashlib
 import logging
 
 from django.db.models import Q, F
-from django.http import FileResponse, Http404 
+from django.http import FileResponse, Http404
 from django.utils.translation import gettext_lazy as _
 from django.contrib.sites.shortcuts import get_current_site
 from django.conf import settings
@@ -29,8 +29,6 @@ from src.apps.video.conf import video_settings
 from src.apps.encoding.conf import encoding_settings
 
 from src.apps.video.services.duplicate import duplicate_video
-from django.shortcuts import get_object_or_404
-
 
 logger = logging.getLogger(__name__)
 
@@ -403,8 +401,17 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return Response({"status": "ownership transferred"})
 
-    @extend_schema(summary="Duplicate a video",description="Creates a full duplicate of a video. The title is automatically set to 'Copy of <original title>'.",request=None,responses={201: VideoSerializer},)
-    @action(detail=True,methods=["post"],permission_classes=[permissions.IsAuthenticated],)
+    @extend_schema(
+        summary="Duplicate a video",
+        description="Creates a full duplicate of a video. The title is automatically set to 'Copy of <original title>'.",
+        request=None,
+        responses={201: VideoSerializer},
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+    )
     def duplicate(self, request, slug=None):
         """
         Creates a full duplicate of a video, including file copy and M2M relations.
@@ -417,7 +424,9 @@ class VideoViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(_("You are not allowed to duplicate videos."))
 
         if video_settings.restrict_edit_to_staff and not request.user.is_staff:
-            raise PermissionDenied(_("Only staff members are allowed to duplicate videos."))
+            raise PermissionDenied(
+                _("Only staff members are allowed to duplicate videos.")
+            )
 
         # Vérification quota avant copie physique du fichier
         if original.video_file:
@@ -433,4 +442,3 @@ class VideoViewSet(viewsets.ModelViewSet):
         duplicated = duplicate_video(original, request.user)
         serializer = self.get_serializer(duplicated)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    

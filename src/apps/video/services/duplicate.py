@@ -1,14 +1,23 @@
+"""
+Esup-Pod - Video duplication service.
+"""
+
 from django.db import transaction
 from django.utils.text import slugify
-
 from src.apps.video.models import Video
-
 from .slug import generate_unique_slug
 from .files import duplicate_source_file
 
 
 @transaction.atomic
 def duplicate_video(original: Video, user):
+    """
+    Duplicates a Video instance for the given user.
+
+    Creates a new Video in DRAFT status with all scalar fields copied,
+    the source file physically duplicated on disk, and all M2M relations
+    (disciplines, restricted_groups, co_owners) mirrored.
+    """
     base_slug = slugify(f"{original.slug}-copy")
     new_slug = generate_unique_slug(base_slug)
 
