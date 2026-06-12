@@ -43,7 +43,7 @@ if video_settings.use_hyperlinks:
             name="video-hyperlink-add",
         ),
         path(
-            "hyperlink/<slug:video_slug>/hyperlinks/<int:hyperlink_id>/",
+            "hyperlink/<slug:video_slug>/hyperlinks/<uuid:hyperlink_id>/",
             VideoHyperlinkViewSet.as_view({"delete": "delete_hyperlink"}),
             name="video-hyperlink-delete",
         ),
