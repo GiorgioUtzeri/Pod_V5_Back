@@ -1,7 +1,6 @@
 """
 Esup-Pod - VideoCut model.
 """
-
 import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -15,18 +14,17 @@ class VideoCut(models.Model):
         "video.Video",
         on_delete=models.CASCADE,
         related_name="cut",
-        verbose_name=_("Vidéo"),
+        verbose_name=_("Video"),
     )
-    time_start = models.PositiveIntegerField(verbose_name=_("Début (secondes)"))
-    time_end = models.PositiveIntegerField(verbose_name=_("Fin (secondes)"))
-
+    time_start = models.PositiveIntegerField(verbose_name=_("Start (seconds)"))
+    time_end = models.PositiveIntegerField(verbose_name=_("End (seconds)"))
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         """VideoCut model metadata."""
 
-        verbose_name = _("Découpe Vidéo")
-        verbose_name_plural = _("Découpes Vidéos")
+        verbose_name = _("Video Cut")
+        verbose_name_plural = _("Video Cuts")
 
     def __str__(self):
         return f"Cut for {self.video.title} ({self.time_start}s - {self.time_end}s)"

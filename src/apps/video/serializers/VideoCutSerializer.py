@@ -1,7 +1,6 @@
 """
 Esup-Pod - VideoCut serializer.
 """
-
 from rest_framework import serializers
 from src.apps.video.models import VideoCut
 
@@ -20,6 +19,6 @@ class VideoCutSerializer(serializers.ModelSerializer):
         """Ensures time_start is strictly less than time_end."""
         if data.get("time_start", 0) >= data.get("time_end", 0):
             raise serializers.ValidationError(
-                "Le temps de début doit être strictement inférieur au temps de fin."
+                "Start time must be strictly less than end time."
             )
         return data
