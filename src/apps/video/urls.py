@@ -12,6 +12,7 @@ from src.apps.video.views import (
     TagViewSet,
     TypeViewSet,
     VideoHyperlinkViewSet,
+    VideoCutViewSet,
 )
 from src.apps.video.conf import video_settings
 
@@ -22,11 +23,16 @@ router.register(r"disciplines", DisciplineViewSet, basename="discipline")
 router.register(r"tags", TagViewSet, basename="tag")
 router.register(r"types", TypeViewSet, basename="type")
 
-urlpatterns = router.urls
-
 if video_settings.use_hyperlinks:
     router.register(
         r"video-hyperlinks", VideoHyperlinkViewSet, basename="video-hyperlink"
+    )
+
+if video_settings.use_cut:
+    router.register(
+        r"video-cuts",
+        VideoCutViewSet,
+        basename="video-cut",
     )
 
 urlpatterns = router.urls
