@@ -8,7 +8,7 @@ from src.apps.video.models import Video, VideoCut
 from src.apps.video.serializers import VideoCutSerializer
 from src.apps.video.conf import video_settings
 from django.utils.translation import gettext_lazy as _
-
+from drf_spectacular.utils import extend_schema
 
 class VideoCutViewSet(viewsets.ViewSet):
     """
@@ -17,14 +17,20 @@ class VideoCutViewSet(viewsets.ViewSet):
     Cleans up time-dependent related objects (chapters, notes) on update.
     """
 
-    def create(self, request, video_pk=None):
+    @extend_schema(
+        summary="Create or replace a video cut",
+        description="Creates or replaces a cut for the given video. time_start and time_end are in seconds.",
+        request=VideoCutSerializer,
+        responses={201: VideoCutSerializer},
+    )
+
+    def create(self, request, video_slug=None):
         """
         Creates or replaces a cut for the given video.
         Deletes existing time-dependent data (chapters, notes) on success.
         """
-        video_id = request.data.get("video")
         try:
-            video = Video.objects.get(pk=video_id)
+            video = Video.objects.get(slug=video_slug)
         except Video.DoesNotExist:
             raise NotFound(_("Video not found."))
 
@@ -52,3 +58,30 @@ class VideoCutViewSet(viewsets.ViewSet):
             VideoCutSerializer(video_cut).data,
             status=status.HTTP_201_CREATED,
         )
+    
+    @extend_schema(
+        summary="Delete a video cut",
+        description="Deletes the cut associated with the given video.",
+        responses={204: None},
+    )
+    def destroy(self, request, video_slug=None):
+        """Deletes the cut associated with the given video."""
+        try:
+            video = Video.objects.get(slug=video_slug)
+        except Video.DoesNotExist:
+            raise NotFound(_("Video not found."))
+
+        is_owner = video.owner == request.user
+        is_co_owner = video.co_owners.filter(pk=request.user.pk).exists()
+        if not (is_owner or is_co_owner or request.user.is_superuser):
+            raise PermissionDenied(_("You do not have permission to delete this cut."))
+
+        if video_settings.restrict_edit_to_staff and not request.user.is_staff:
+            raise PermissionDenied(_("Only staff members are allowed to delete cuts."))
+
+        try:
+            video.cut.delete()
+        except VideoCut.DoesNotExist:
+            raise NotFound(_("No cut found for this video."))
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -63,6 +63,20 @@ if video_settings.use_hyperlinks:
         ),
     ]
 
+if video_settings.use_cut:
+    urlpatterns += [
+        path(
+            "cut/<slug:video_slug>/",
+            VideoCutViewSet.as_view({"post": "create"}),
+            name="video-cut-create",
+        ),
+        path(
+            "cut/<slug:video_slug>/delete/",
+            VideoCutViewSet.as_view({"delete": "destroy"}),
+            name="video-cut-delete",
+        ),
+    ]
+
 if video_settings.active_video_comment:
     urlpatterns += [
         path(
