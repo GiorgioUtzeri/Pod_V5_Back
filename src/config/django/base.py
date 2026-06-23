@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "src.apps.encoding",
     "tagulous",
     "src.apps.collection",
+    "src.apps.import_video",
 ]
 
 MIDDLEWARE = [
