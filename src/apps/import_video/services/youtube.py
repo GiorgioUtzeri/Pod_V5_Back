@@ -10,49 +10,55 @@ logger = logging.getLogger(__name__)
 
 def get_youtube_metadata(source_url: str) -> dict:
     """
-    Fetches metadata from a YouTube video URL.
-    Returns a dict with title, publish_date, and stream object.
+    Fetches metadata from a YouTube video URL using yt-dlp.
+    Returns a dict with title, publish_date and filesize.
     Raises ValueError on failure.
     """
     try:
-        from pytubefix import YouTube
-
-        yt = YouTube(source_url, "WEB")
-        stream = yt.streams.get_highest_resolution()
-
-        if not stream:
-            raise ValueError("No downloadable stream found for this YouTube video.")
-
-        return {
-            "title": yt.title,
-            "publish_date": yt.publish_date,
-            "stream": stream,
-            "filesize": stream.filesize,
-        }
-
+        import yt_dlp
     except ImportError:
-        raise ValueError("pytubefix is not installed. Cannot import YouTube videos.")
+        raise ValueError("yt-dlp is not installed. Cannot import YouTube videos.")
+
+    ydl_opts = {"quiet": True, "skip_download": True}
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(source_url, download=False)
+            return {
+                "title": info.get("title", ""),
+                "publish_date": info.get("upload_date"),
+                "filesize": info.get("filesize") or info.get("filesize_approx", 0),
+            }
     except Exception as e:
         raise ValueError(f"Failed to fetch YouTube metadata: {e}")
 
 
 def download_youtube_video(source_url: str, dest_dir: str) -> str:
     """
-    Downloads a YouTube video to the given directory.
+    Downloads a YouTube video using yt-dlp.
     Returns the path of the downloaded file.
     Raises ValueError on failure.
     """
+    try:
+        import yt_dlp
+    except ImportError:
+        raise ValueError("yt-dlp is not installed. Cannot import YouTube videos.")
+
     from src.apps.import_video.services.downloader import check_video_size
 
     metadata = get_youtube_metadata(source_url)
     check_video_size(metadata["filesize"])
 
+    os.makedirs(dest_dir, exist_ok=True)
+    ydl_opts = {
+        "outtmpl": os.path.join(dest_dir, "%(id)s.%(ext)s"),
+        "format": "best[ext=mp4]/best",
+        "quiet": True,
+    }
     try:
-        stream = metadata["stream"]
-        os.makedirs(dest_dir, exist_ok=True)
-        path = stream.download(output_path=dest_dir)
-        logger.info("YouTube video downloaded to %s", path)
-        return path
-
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(source_url, download=True)
+            filename = ydl.prepare_filename(info)
+            logger.info("YouTube video downloaded to %s", filename)
+            return filename
     except Exception as e:
         raise ValueError(f"Failed to download YouTube video: {e}")
