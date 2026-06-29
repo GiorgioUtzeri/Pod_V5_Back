@@ -2,4 +2,4 @@
 Esup-Pod - Notes default configuration.
 """
 
-USE_NOTES = True
+USE_NOTES = False
