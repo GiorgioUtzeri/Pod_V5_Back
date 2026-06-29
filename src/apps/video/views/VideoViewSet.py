@@ -7,20 +7,22 @@ import logging
 import hashlib
 
 from rest_framework.response import Response
-from rest_framework import viewsets, permissions, parsers, filters
+from rest_framework import viewsets, permissions, parsers, filters, status
+from django.db import transaction
 from django.db.models import Q, F
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import gettext_lazy as _
 from django.http import FileResponse, Http404
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
 from django.contrib.auth.hashers import check_password
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from src.apps.video.models import Video
 from src.apps.video.serializers import VideoSerializer
 from src.apps.video.permissions import IsOwnerOrCoOwnerOrChannelCollaborator
+from src.apps.video.tasks import task_bulk_update_videos, task_bulk_delete_videos
 from src.apps.authentication.permissions import IsSuperUser
 from django_filters.rest_framework import DjangoFilterBackend
 from src.apps.video.conf import video_settings
@@ -33,6 +35,19 @@ class VideoViewSet(viewsets.ModelViewSet):
     """
     API view set for the Video model.
     """
+
+    BULK_EXCLUDED_FIELDS = {
+        "title",
+        "video_file",
+        "slug",
+        "owner",
+        "created_at",
+        "updated_at",
+        "duration",
+        "encoding_status",
+    }
+
+    BULK_ASYNC_THRESHOLD = 20
 
     queryset = Video.objects.all()
     serializer_class = VideoSerializer
@@ -506,3 +521,122 @@ class VideoViewSet(viewsets.ModelViewSet):
         video.save(update_fields=["owner"])
 
         return Response({"status": "ownership transferred"})
+
+    def _bulk_delete(self, request, video_ids, videos):
+        """Handles bulk deletion of videos, async if above threshold."""
+        if len(video_ids) > self.BULK_ASYNC_THRESHOLD:
+            task_bulk_delete_videos.delay(video_ids, request.user.id)
+            return Response(
+                {"status": "queued", "detail": _("Bulk delete is being processed.")},
+                status=status.HTTP_202_ACCEPTED,
+            )
+        with transaction.atomic():
+            deleted_count, _deleted_types = videos.delete()
+        return Response({"deleted": deleted_count}, status=status.HTTP_200_OK)
+
+    def _bulk_patch(self, request, video_ids, videos):
+        """Handles bulk patch of videos, async if above threshold."""
+        fields = request.data.get("fields", {})
+        if not fields:
+            raise ValidationError({"detail": _("No fields provided for update.")})
+
+        invalid_fields = set(fields.keys()) & self.BULK_EXCLUDED_FIELDS
+        if invalid_fields:
+            raise ValidationError(
+                {
+                    "detail": _("Fields not allowed in bulk update: %(fields)s.")
+                    % {"fields": ", ".join(invalid_fields)}
+                }
+            )
+
+        if len(video_ids) > self.BULK_ASYNC_THRESHOLD:
+            task_bulk_update_videos.delay(video_ids, fields, request.user.id)
+            return Response(
+                {"status": "queued", "detail": _("Bulk update is being processed.")},
+                status=status.HTTP_202_ACCEPTED,
+            )
+
+        allowed_fields = set(fields.keys()) - self.BULK_EXCLUDED_FIELDS
+        update_data = {k: v for k, v in fields.items() if k in allowed_fields}
+
+        with transaction.atomic():
+            for video in videos:
+                for attr, value in update_data.items():
+                    if hasattr(video, attr):
+                        setattr(video, attr, value)
+                video.save(update_fields=list(update_data.keys()))
+
+        return Response({"updated": videos.count()}, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        summary="Bulk update or delete videos",
+        description=(
+            "Applies a PATCH or DELETE operation to multiple videos at once. "
+            "Requires ownership or co-ownership of every selected video. "
+            "If more than 20 videos are selected, the operation is processed "
+            "asynchronously and returns 202 Accepted."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "video_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "List of video IDs to process.",
+                    },
+                    "fields": {
+                        "type": "object",
+                        "description": "Fields to update (PATCH only).",
+                    },
+                },
+                "required": ["video_ids"],
+            }
+        },
+        responses={
+            200: {"type": "object", "properties": {"updated": {"type": "integer"}}},
+            202: {"type": "object", "properties": {"status": {"type": "string"}}},
+            204: None,
+            400: {"type": "object", "properties": {"detail": {"type": "string"}}},
+            403: {"type": "object", "properties": {"detail": {"type": "string"}}},
+            404: {"type": "object", "properties": {"detail": {"type": "string"}}},
+        },
+    )
+    @action(
+        detail=False,
+        methods=["patch", "delete"],
+        url_path="bulk",
+        permission_classes=[permissions.IsAuthenticated],
+        parser_classes=[parsers.JSONParser],
+    )
+    def bulk_actions(self, request):
+        """
+        Applies a PATCH or DELETE to multiple videos.
+        Checks ownership on every video before processing.
+        Delegates to Celery if more than BULK_ASYNC_THRESHOLD videos are selected.
+        """
+        video_ids = request.data.get("video_ids", [])
+
+        if not video_ids:
+            raise ValidationError({"detail": _("No videos selected.")})
+
+        videos = self.get_queryset().filter(id__in=video_ids)
+
+        if videos.count() != len(video_ids):
+            raise NotFound(_("One or more videos not found."))
+
+        for video in videos:
+            if (
+                not request.user.is_superuser
+                and video.owner != request.user
+                and not video.co_owners.filter(pk=request.user.pk).exists()
+            ):
+                raise PermissionDenied(
+                    _("You do not have permission to modify video: %(title)s.")
+                    % {"title": video.title}
+                )
+
+        if request.method == "DELETE":
+            return self._bulk_delete(request, video_ids, videos)
+
+        return self._bulk_patch(request, video_ids, videos)
