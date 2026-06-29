@@ -14,6 +14,7 @@ Each application has its own dedicated documentation with overview and technical
 
 - **[Authentication](authentication/README.md)**: Local login, CAS, LDAP, OIDC, and user management.
 - **[Video](video/README.md)**: Video lifecycle, upload, access control, streaming, and subtitle management.
+- **[Notes](notes/README.md)**: Take personal or shared timestamped notes on videos.
 - **[Collection](collection/README.md)**: Organize videos into Channels, Themes, and Playlists.
 - **[Encoding](encoding/README.md)**: Video transcoding with Celery, Redis, and external Runner Manager.
 - **[API & Swagger](api/README.md)**: REST API usage and documentation guide.
@@ -46,6 +47,7 @@ Pod_V5_Back/
 │   │   ├── authentication/
 │   │   ├── video/
 │   │   ├── collection/
+│   │   ├── notes/
 │   │   ├── encoding/
 │   │   └── core/
 │   └── config/         # Configuration & Settings
@@ -56,6 +58,7 @@ Pod_V5_Back/
 │   ├── authentication/
 │   ├── video/
 │   ├── collection/
+│   ├── notes/
 │   ├── encoding/
 │   ├── api/
 │   ├── core/
