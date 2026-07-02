@@ -97,17 +97,15 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         qs = Video.objects.filter(sites=current_site)
 
-        if getattr(self, "action", None) in ["stream", "unlock", "register_view"]:
+        if getattr(self, "action", None) in [
+            "stream",
+            "unlock",
+            "register_view",
+            "create_stream_token",
+        ]:
             return qs
 
         return Video.objects.visible_for(user).filter(id__in=qs).distinct()
-
-    def get_authenticators(self):
-        authenticators = super().get_authenticators()
-        if getattr(self, "action", None) == "stream":
-            from src.apps.authentication.authentication import QueryParameterJWTAuthentication
-            authenticators = [QueryParameterJWTAuthentication()] + authenticators
-        return authenticators
 
     def perform_create(self, serializer):
         """Creates a new video, checking user quota and triggering encoding."""
@@ -231,6 +229,39 @@ class VideoViewSet(viewsets.ModelViewSet):
         return video.video_file
 
     @extend_schema(
+        summary="Create an ephemeral stream token",
+        responses={
+            200: OpenApiResponse(
+                description="Token created successfully.",
+                response={
+                    "type": "object",
+                    "properties": {"stream_token": {"type": "string"}},
+                },
+            ),
+        },
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.AllowAny],
+        url_path="create-stream-token",
+    )
+    def create_stream_token(self, request, slug=None):
+        """
+        Generates an ephemeral token (valid for 5 minutes) to securely access the stream endpoint.
+        """
+        video = self.get_object()
+        self._check_stream_permissions(request, video)
+
+        import uuid
+        from django.core.cache import cache
+
+        token = str(uuid.uuid4())
+        cache.set(f"stream_token_{token}", video.id, timeout=300)
+
+        return Response({"stream_token": token})
+
+    @extend_schema(
         summary="Stream video file",
         parameters=[
             OpenApiParameter(
@@ -239,7 +270,14 @@ class VideoViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 description="Target resolution for streaming (e.g., '1080', '720p', '360'). If specified without 'p', the backend automatically appends it.",
-            )
+            ),
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Ephemeral stream token obtained from /create-stream-token/.",
+            ),
         ],
         responses={
             200: OpenApiResponse(
@@ -248,6 +286,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(
                 description="Video file or specified resolution not found on disk."
             ),
+            403: OpenApiResponse(description="Invalid or missing stream token."),
         },
     )
     @action(detail=True, methods=["get"], permission_classes=[permissions.AllowAny])
@@ -258,7 +297,16 @@ class VideoViewSet(viewsets.ModelViewSet):
         """
         video = self.get_object()
 
-        self._check_stream_permissions(request, video)
+        from django.core.cache import cache
+
+        token = request.query_params.get("token")
+
+        if not token:
+            raise PermissionDenied(_("Missing stream token."))
+
+        cached_video_id = cache.get(f"stream_token_{token}")
+        if not cached_video_id or cached_video_id != video.id:
+            raise PermissionDenied(_("Invalid or expired stream token."))
 
         resolution = request.query_params.get("resolution")
         if resolution and not resolution.endswith("p"):
