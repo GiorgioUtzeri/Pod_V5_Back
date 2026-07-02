@@ -105,7 +105,10 @@ class VideoViewSet(viewsets.ModelViewSet):
     def get_authenticators(self):
         authenticators = super().get_authenticators()
         if getattr(self, "action", None) == "stream":
-            from src.apps.authentication.authentication import QueryParameterJWTAuthentication
+            from src.apps.authentication.authentication import (
+                QueryParameterJWTAuthentication,
+            )
+
             authenticators = [QueryParameterJWTAuthentication()] + authenticators
         return authenticators
 

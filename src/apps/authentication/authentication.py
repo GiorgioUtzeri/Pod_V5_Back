@@ -1,11 +1,13 @@
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+
 class QueryParameterJWTAuthentication(JWTAuthentication):
     """
     Custom JWT authentication that checks the 'token' query parameter
     if the Authorization header is not provided. Useful for HTML5 video
     streaming where setting headers in the <video> tag is not possible.
     """
+
     def authenticate(self, request):
         # First try to authenticate using the standard header
         header_auth = super().authenticate(request)
