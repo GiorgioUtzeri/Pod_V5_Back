@@ -56,6 +56,23 @@ class VideoConfig(BaseSettings):
         description=_("Enable video cutting feature."),
         json_schema_extra={"public": True},
     )
+    use_dublin_core: bool = Field(
+        default=defaults.USE_DUBLIN_CORE,
+        description=_("Enable Dublin Core metadata endpoint."),
+        json_schema_extra={"public": True},
+    )
+    oai_pmh_repository_name: str = Field(
+        default=defaults.OAI_PMH_REPOSITORY_NAME,
+        description=_("OAI-PMH repository name for Identify verb."),
+    )
+    oai_pmh_admin_email: str = Field(
+        default=defaults.OAI_PMH_ADMIN_EMAIL,
+        description=_("OAI-PMH administrator email for Identify verb."),
+    )
+    oai_pmh_page_size: int = Field(
+        default=defaults.OAI_PMH_PAGE_SIZE,
+        description=_("Number of records per page in OAI-PMH ListRecords response."),
+    )
     allow_authenticated_upload: bool = Field(
         default=defaults.ALLOW_AUTHENTICATED_UPLOAD,
         description=_("Allow authenticated users to upload videos."),
