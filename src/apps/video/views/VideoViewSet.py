@@ -97,7 +97,12 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         qs = Video.objects.filter(sites=current_site)
 
-        if getattr(self, "action", None) in ["stream", "unlock", "register_view", "create_stream_token"]:
+        if getattr(self, "action", None) in [
+            "stream",
+            "unlock",
+            "register_view",
+            "create_stream_token",
+        ]:
             return qs
 
         return Video.objects.visible_for(user).filter(id__in=qs).distinct()
