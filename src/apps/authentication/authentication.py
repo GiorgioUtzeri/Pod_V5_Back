@@ -1,4 +1,7 @@
+"""Esup-Pod - Authentication mechanisms."""
+
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
 
 class QueryParameterJWTAuthentication(JWTAuthentication):
     """
@@ -6,7 +9,9 @@ class QueryParameterJWTAuthentication(JWTAuthentication):
     if the Authorization header is not provided. Useful for HTML5 video
     streaming where setting headers in the <video> tag is not possible.
     """
+
     def authenticate(self, request):
+        """Authenticate the request using JWT header or query parameter."""
         # First try to authenticate using the standard header
         header_auth = super().authenticate(request)
         if header_auth is not None:

@@ -103,9 +103,13 @@ class VideoViewSet(viewsets.ModelViewSet):
         return Video.objects.visible_for(user).filter(id__in=qs).distinct()
 
     def get_authenticators(self):
+        """Get authenticators for the view, adding custom query param JWT if needed."""
         authenticators = super().get_authenticators()
         if getattr(self, "action", None) == "stream":
-            from src.apps.authentication.authentication import QueryParameterJWTAuthentication
+            from src.apps.authentication.authentication import (
+                QueryParameterJWTAuthentication,
+            )
+
             authenticators = [QueryParameterJWTAuthentication()] + authenticators
         return authenticators
 
