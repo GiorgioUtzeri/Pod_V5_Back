@@ -143,10 +143,23 @@ class Command(BaseCommand):
         """Re-index all published videos in batches."""
         from src.apps.search.services.indexer import index_video
         from src.apps.video.models import Video
+        from django.db import reset_queries
+        import gc
 
-        # Get all non-draft videos (same filter as V4 get_available_videos())
+        # Force DEBUG to False to prevent Django from keeping SQL queries in memory
+        settings.DEBUG = False
+
+        # Use prefetch_related to avoid N+1 queries during document building
         qs = (
             Video.objects.select_related("owner", "type", "cursus", "language", "channel")
+            .prefetch_related(
+                "contributions__contributor",
+                "overlays",
+                "themes",
+                "disciplines",
+                "tags",
+                "sites",
+            )
             .exclude(status=Video.Status.DRAFT)
             .order_by("pk")
         )
@@ -157,23 +170,24 @@ class Command(BaseCommand):
         indexed = 0
         errors = 0
 
-        for i in range(0, total, batch_size):
-            batch = qs[i : i + batch_size]
-            for video in batch:
-                try:
-                    index_video(video)
-                    indexed += 1
-                except Exception as exc:
-                    errors += 1
-                    logger.error("Error indexing video #%s: %s", video.pk, exc)
+        # Use iterator() with chunk_size to prevent loading all objects into memory
+        for video in qs.iterator(chunk_size=batch_size):
+            try:
+                index_video(video)
+                indexed += 1
+            except Exception as exc:
+                errors += 1
+                logger.error("Error indexing video #%s: %s", video.pk, exc)
 
-            self.stdout.write(
-                f"  Progress: {min(i + batch_size, total)}/{total} "
-                f"(indexed: {indexed}, errors: {errors})"
-            )
-            # Small pause between batches (like V4's time.sleep(10) every 1000)
-            if (i + batch_size) % 1000 == 0:
-                time.sleep(2)
+            # Print progress and clear memory at the end of each batch
+            if indexed % batch_size == 0:
+                self.stdout.write(
+                    f"  Progress: {indexed}/{total} "
+                    f"(indexed: {indexed}, errors: {errors})"
+                )
+                reset_queries()
+                gc.collect()
+                time.sleep(1)
 
         self.stdout.write(
             self.style.SUCCESS(f"Done. {indexed} videos indexed, {errors} errors.")

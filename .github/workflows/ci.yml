@@ -118,6 +118,15 @@ jobs:
         # Runs against the running docker container from the host
         run: python src/config/django/test/e2e_scenario.py
 
+      - name: Run API Curl Tests (Per App)
+        run: |
+          for script in scripts/test_*.sh; do
+            if [ "$script" != "scripts/test_base.sh" ]; then
+              echo "Running $script..."
+              bash "$script" || exit 1
+            fi
+          done
+
       - name: Basic Load Test
         run: |
           fail=0

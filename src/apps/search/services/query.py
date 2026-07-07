@@ -10,9 +10,12 @@ V4 facets replicated:
   + themes_title (new in V5)
 """
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+
+from django.core.cache import cache
 
 from redis.commands.search.aggregation import AggregateRequest, Desc
 from redis.commands.search import reducers
@@ -22,6 +25,11 @@ from src.apps.search.conf import search_settings
 from src.apps.search.services.indexer import get_redis_client
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL for facets (short: new videos must appear quickly)
+FACETS_CACHE_TTL = 120  # 2 minutes
+# Cache TTL for search results
+SEARCH_CACHE_TTL = 60  # 1 minute
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -161,6 +169,12 @@ def _build_ft_query(filters: SearchFilters) -> str:  # noqa: C901
 # ---------------------------------------------------------------------------
 
 
+def _make_cache_key(prefix: str, q_str: str, page: int = 0) -> str:
+    """Build a stable cache key from the Redis query string and page number."""
+    digest = hashlib.md5(f"{q_str}:{page}".encode()).hexdigest()
+    return f"pod:search:{prefix}:{digest}"
+
+
 def search_videos(filters: SearchFilters) -> SearchResult:
     """
     Executes an FT.SEARCH query and returns structured results.
@@ -168,12 +182,23 @@ def search_videos(filters: SearchFilters) -> SearchResult:
 
     Returns video PKs (not full objects) — DRF views are responsible for
     fetching the actual Video queryset from the DB.
+
+    Results are cached in Redis (TTL=60s) to reduce load on Redis Search
+    — same cache-aside pattern as V4 on Elasticsearch.
     """
     size = search_settings.search_results_per_page
     page = min(filters.page, search_settings.search_max_page)
     offset = page * size
 
     q_str = _build_ft_query(filters)
+
+    # --- Check cache before querying Redis Search ---
+    cache_key = _make_cache_key("results", q_str, page)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Cache HIT search_videos — key=%s", cache_key)
+        return cached
+
     client = get_redis_client()
 
     try:
@@ -215,7 +240,7 @@ def search_videos(filters: SearchFilters) -> SearchResult:
 
     has_next = (page + 1) * size < total
 
-    return SearchResult(
+    search_result = SearchResult(
         video_ids=video_ids,
         total=total,
         has_next=has_next,
@@ -223,6 +248,12 @@ def search_videos(filters: SearchFilters) -> SearchResult:
         facets=facets,
         query=q_str,
     )
+
+    # --- Store the full result in cache ---
+    cache.set(cache_key, search_result, timeout=SEARCH_CACHE_TTL)
+    logger.debug("Cache SET search_videos — key=%s, ttl=%ss", cache_key, SEARCH_CACHE_TTL)
+
+    return search_result
 
 
 def _get_facets(client, q_str: str) -> Dict[str, List[FacetValue]]:
@@ -232,7 +263,16 @@ def _get_facets(client, q_str: str) -> Dict[str, List[FacetValue]]:
 
     V4 facets: owner_full_name, type_title, disciplines_title, tags_name,
                channels_title, cursus, main_lang → all replicated here + themes.
+
+    The 8 FT.AGGREGATE calls are expensive — results are cached in Redis (TTL=120s).
     """
+    # --- Cache-aside: same pattern as V4 context_video_data() ---
+    cache_key = _make_cache_key("facets", q_str)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.debug("Cache HIT _get_facets — key=%s", cache_key)
+        return cached
+
     facets: Dict[str, List[FacetValue]] = {}
 
     for redis_field, display_name in FACET_FIELDS:
@@ -259,5 +299,8 @@ def _get_facets(client, q_str: str) -> Dict[str, List[FacetValue]]:
         except Exception as exc:
             logger.debug("Facet aggregation failed for field '%s': %s", redis_field, exc)
             facets[display_name] = []
+
+    cache.set(cache_key, facets, timeout=FACETS_CACHE_TTL)
+    logger.debug("Cache SET _get_facets — key=%s, ttl=%ss", cache_key, FACETS_CACHE_TTL)
 
     return facets

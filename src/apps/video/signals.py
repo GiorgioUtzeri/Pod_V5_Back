@@ -6,6 +6,7 @@ import logging
 import os
 
 from django.contrib.sites.models import Site
+from django.core.cache import cache
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.utils.text import slugify
@@ -14,6 +15,27 @@ from src.apps.video.services.metadata import extract_video_duration
 from src.apps.utils.files import safe_remove_file
 
 logger = logging.getLogger(__name__)
+
+# Clés de cache à invalider quand une vidéo change (même logique que V4 cache.delete_many)
+_VIDEO_CACHE_KEYS = ["pod:video:metadata"]
+
+
+def _invalidate_video_caches():
+    """
+    Invalide tous les caches applicatifs liés aux données vidéo.
+    Équivalent V4 : cache.delete_many(["DISCIPLINES", "VIDEOS_COUNT", ...])
+    + suppression par pattern de tous les caches de recherche.
+    """
+    cache.delete_many(_VIDEO_CACHE_KEYS)
+    logger.debug("Cache invalided: %s", _VIDEO_CACHE_KEYS)
+
+    # Invalidation des caches de recherche par pattern (nécessite django-redis)
+    try:
+        cache.delete_pattern("pod:search:*")
+        logger.debug("Cache invalided: pod:search:*")
+    except AttributeError:
+        # Si le backend n'est pas django-redis (ex: locmem en test), passer silencieusement
+        logger.debug("delete_pattern non supporté sur le backend cache actuel — ignoré")
 
 
 @receiver(post_save, sender=Video)
@@ -131,3 +153,21 @@ def auto_assign_site_to_type(sender, instance, created, **kwargs):
                 instance.sites.add(current_site)
         except Exception as e:
             logger.warning("Could not auto-assign site to type %s: %s", instance.pk, e)
+
+
+@receiver(post_save, sender=Video)
+def invalidate_cache_on_video_save(sender, instance, **kwargs):
+    """
+    Invalide les caches applicatifs après chaque modification d'une vidéo.
+    Équivalent V4 : la commande `cache_video_data` était appelée par cron
+    — ici on invalide directement au moment du changement.
+    """
+    _invalidate_video_caches()
+
+
+@receiver(post_delete, sender=Video)
+def invalidate_cache_on_video_delete(sender, instance, **kwargs):
+    """
+    Invalide les caches applicatifs après suppression d'une vidéo.
+    """
+    _invalidate_video_caches()
