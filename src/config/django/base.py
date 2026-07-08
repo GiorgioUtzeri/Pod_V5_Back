@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "src.apps.completion",
     "src.apps.dressing",
     "src.apps.layout",
+    "src.apps.import_video",
 ]
 
 MIDDLEWARE = [
@@ -182,6 +183,7 @@ APPS_WITH_CUSTOM_SETTINGS = [
     "collection",
     "completion",
     "layout",
+    "import_video",
 ]
 
 
