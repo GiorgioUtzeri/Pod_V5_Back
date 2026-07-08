@@ -15,7 +15,9 @@ from src.apps.layout.conf import layout_settings
 )
 class BlockConfigViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    A simple ViewSet for viewing layout block configurations.
+    ViewSet to read and expose the layout configuration blocks.
+    These blocks are typically managed in the Django admin and consumed by the frontend
+    to dynamically build the UI components (like the homepage layout).
     """
 
     permission_classes = [permissions.AllowAny]
