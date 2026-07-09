@@ -119,13 +119,7 @@ jobs:
         run: python src/config/django/test/e2e_scenario.py
 
       - name: Run API Curl Tests (Per App)
-        run: |
-          for script in scripts/test_*.sh; do
-            if [ "$script" != "scripts/test_base.sh" ]; then
-              echo "Running $script..."
-              bash "$script" || exit 1
-            fi
-          done
+        run: make test-api-curl
 
       - name: Basic Load Test
         run: |
