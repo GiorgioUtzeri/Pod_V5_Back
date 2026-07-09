@@ -239,10 +239,10 @@ class VideoViewSet(viewsets.ModelViewSet):
     @extend_schema(
         summary="Créer un jeton de stream éphémère (Create an ephemeral stream token)",
         description=(
-            "Génère un jeton éphémère (valide 5 minutes) pour lire la vidéo. "
-            "Le front-end appelle cette route juste avant de charger le lecteur vidéo. "
-            "Cela permet d'autoriser le lecteur à lire le flux (stream) via une URL simple, "
-            "sans avoir besoin d'exposer le JWT principal de l'utilisateur ou d'utiliser des cookies."
+            "Generates a short-lived stream token (valid for 5 minutes) to access the video. "
+            "The frontend calls this endpoint immediately before loading the video player. "
+            "This allows the player to access the video stream through a simple URL "
+            "without exposing the user's primary JWT or relying on session cookies."
         ),
         responses={
             200: OpenApiResponse(
