@@ -2,6 +2,7 @@
 
 This document is the **reference guide for any developer maintaining a Pod V5 instance**. It covers all available `manage.py` commands organized by functional domain.
 
+This document details the maintenance tools developed for the **core** application of Pod V5. These commands ensure project integrity by linking the source code (Python), the data repository (JSON), and the user documentation (Markdown).
 > **Navigation:** [Back to Overview](README.md) | [Back to Index](../README.md)
 
 ---

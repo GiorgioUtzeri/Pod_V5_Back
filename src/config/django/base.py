@@ -46,12 +46,14 @@ INSTALLED_APPS = [
     "src.apps.info",
     "src.apps.core",
     "src.apps.video",
+    "src.apps.notes",
     "src.apps.encoding",
     "tagulous",
     "src.apps.collection",
     "src.apps.completion",
     "src.apps.dressing",
     "src.apps.search",
+    "src.apps.import_video",
 ]
 
 MIDDLEWARE = [
@@ -182,6 +184,7 @@ APPS_WITH_CUSTOM_SETTINGS = [
     "collection",
     "completion",
     "search",
+    "import_video",
 ]
 
 

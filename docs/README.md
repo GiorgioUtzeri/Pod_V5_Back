@@ -17,9 +17,15 @@ Each application has its own dedicated documentation with overview and technical
 - **[Search](search/README.md)**: Full-text search with Redis Search, cache strategy, and index management.
 - **[Completion](completion/README.md)**: Additional metadata, documents, contributors, overlays, and model enrichment.
 - **[Collection](collection/README.md)**: Organize videos into Channels, Themes, and Playlists.
+- **[Notes](notes/README.md)**: Timestamped and global user notes attached to videos.
+- **[Import Video](import_video/README.md)**: Import external videos from YouTube, PeerTube, BigBlueButton, Mediacad, and direct URLs.
 - **[Encoding](encoding/README.md)**: Video transcoding with Celery, Redis, and external Runner Manager.
+- **[Dressing](dressing/README.md)**: Automated video branding with watermarks and intros/outros.
 - **[API & Swagger](api/README.md)**: REST API usage and documentation guide.
+- **[Core & Management](core/README.md)**: CLI commands for audit and maintenance.
 - **[Maintenance & Commands](core/details.md)**: All `manage.py` commands for maintaining a Pod instance (search reindex, cache, migration, config).
+- **[Info](info/README.md)**: System status and public dynamic configuration flags.
+- **[Utils](utils/README.md)**: Core utilities, internal paths, and base models.
 
 ### Infrastructure & Deployment
 
@@ -48,7 +54,12 @@ Pod_V5_Back/
 │   │   ├── authentication/
 │   │   ├── video/
 │   │   ├── collection/
+│   │   ├── notes/
+│   │   ├── import_video/
 │   │   ├── encoding/
+│   │   ├── dressing/
+│   │   ├── info/
+│   │   ├── utils/
 │   │   └── core/
 │   └── config/         # Configuration & Settings
 │       ├── django/     # Django Settings (Base, Dev, Test, Prod)
@@ -59,7 +70,11 @@ Pod_V5_Back/
 │   ├── video/
 │   ├── completion/
 │   ├── collection/
+│   ├── notes/
 │   ├── encoding/
+│   ├── dressing/
+│   ├── info/
+│   ├── utils/
 │   ├── api/
 │   ├── core/
 │   └── deployment/
