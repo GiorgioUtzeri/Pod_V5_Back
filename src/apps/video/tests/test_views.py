@@ -221,9 +221,15 @@ class VideoViewSetTests(APITestCase):
         self.assertIn("VIP Video", titles)
 
     def test_stream_video_owner(self):
-        """Verifies that the owner can successfully stream their video."""
+        """Verifies that the owner can successfully stream their video using a stream token."""
         self.client.force_authenticate(user=self.user)
-        url = reverse("video-stream", kwargs={"slug": self.video.slug})
+        # Create token first
+        token_url = reverse("video-create-stream-token", kwargs={"slug": self.video.slug})
+        token_response = self.client.post(token_url)
+        self.assertEqual(token_response.status_code, status.HTTP_200_OK)
+        token = token_response.data["stream_token"]
+
+        url = f"{reverse('video-stream', kwargs={'slug': self.video.slug})}?token={token}"
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "video/mp4")

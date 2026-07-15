@@ -1,6 +1,4 @@
-"""
-Esup-Pod - Video viewset.
-"""
+"""Esup-Pod - Video viewset."""
 
 import os
 import hashlib
@@ -20,6 +18,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError, NotFoun
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.hashers import check_password
+
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -45,7 +44,12 @@ logger = logging.getLogger(__name__)
 @extend_schema_view(
     list=extend_schema(
         summary="List videos",
-        description="Retrieve a list of videos. This endpoint supports advanced multi-value filtering. You can pass multiple values for the same parameter (e.g., `?tags__name=python&tags__name=django` or `?discipline=1&discipline=2`). Supported multi-value fields: `tags__name`, `tags__slug`, `type__slug`, `cursus__slug`, `discipline`, `status`, and `owner__username`.",
+        description=(
+            "Retrieve a list of videos. This endpoint supports advanced multi-value filtering. "
+            "You can pass multiple values for the same parameter (e.g., `?tags__name=python&tags__name=django` "
+            "or `?discipline=1&discipline=2`). Supported multi-value fields: `tags__name`, `tags__slug`, "
+            "`type__slug`, `cursus__slug`, `discipline`, `status`, and `owner__username`."
+        ),
     )
 )
 class VideoViewSet(viewsets.ModelViewSet):
@@ -118,7 +122,12 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         qs = Video.objects.filter(sites=current_site)
 
-        if getattr(self, "action", None) in ["stream", "unlock", "register_view"]:
+        if getattr(self, "action", None) in [
+            "stream",
+            "unlock",
+            "register_view",
+            "create_stream_token",
+        ]:
             return qs
 
         return (
@@ -189,9 +198,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             from src.apps.encoding.tasks import trigger_runner_encoding_task
 
             source_url = self.request.build_absolute_uri(video.video_file.url)
-
             logger.debug("source_url: %s", source_url)
-
             trigger_runner_encoding_task.delay(video.pk, source_url)
 
     def _is_owner_or_admin(self, user, video):
@@ -221,6 +228,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         """Checks if the user can access a restricted video."""
         if video.is_auth_required and not request.user.is_authenticated:
             raise PermissionDenied(_("Authentication required to play this video."))
+
         if not video.password:
             return
 
@@ -254,12 +262,61 @@ class VideoViewSet(viewsets.ModelViewSet):
         """Helper to find the appropriate video file for streaming."""
         if resolution:
             encoding = video.encodings.filter(resolution=resolution).first()
-            if encoding and encoding.file:
-                return encoding.file
-        first_encoding = video.encodings.first()
-        if first_encoding and first_encoding.file:
-            return first_encoding.file
-        return video.video_file
+            if encoding and encoding.file and encoding.file.name:
+                if os.path.exists(encoding.file.path):
+                    return encoding.file
+
+        # Check all encodings and return the first one that actually exists on disk
+        for encoding in video.encodings.all():
+            if encoding.file and encoding.file.name:
+                if os.path.exists(encoding.file.path):
+                    return encoding.file
+
+        # Fallback to the original video file
+        if video.video_file and video.video_file.name:
+            return video.video_file
+        return None
+
+    @extend_schema(
+        summary="Créer un jeton de stream éphémère (Create an ephemeral stream token)",
+        description=(
+            "Génère un jeton éphémère (valide 5 minutes) pour lire la vidéo. "
+            "Le front-end appelle cette route juste avant de charger le lecteur vidéo. "
+            "Cela permet d'autoriser le lecteur à lire le flux (stream) via une URL simple, "
+            "sans avoir besoin d'exposer le JWT principal de l'utilisateur ou d'utiliser des cookies."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="Token created successfully.",
+                response={
+                    "type": "object",
+                    "properties": {"stream_token": {"type": "string"}},
+                },
+            ),
+        },
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.AllowAny],
+        url_path="create-stream-token",
+    )
+    def create_stream_token(self, request, slug=None):
+        """
+        Generates an ephemeral token (valid for 5 minutes) to securely access the stream endpoint.
+        This allows the video player to fetch the video stream using a short-lived token in the URL,
+        avoiding the need to pass the user's main JWT token or rely on session cookies.
+        """
+        video = self.get_object()
+        self._check_stream_permissions(request, video)
+
+        import uuid
+        from django.core.cache import cache
+
+        token = str(uuid.uuid4())
+        cache.set(f"stream_token_{token}", video.id, timeout=300)
+
+        return Response({"stream_token": token})
 
     @extend_schema(
         summary="Stream video file",
@@ -270,7 +327,14 @@ class VideoViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 description="Target resolution for streaming (e.g., '1080', '720p', '360'). If specified without 'p', the backend automatically appends it.",
-            )
+            ),
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Ephemeral stream token obtained from /create-stream-token/.",
+            ),
         ],
         responses={
             200: OpenApiResponse(
@@ -279,6 +343,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(
                 description="Video file or specified resolution not found on disk."
             ),
+            403: OpenApiResponse(description="Invalid or missing stream token."),
         },
     )
     @action(detail=True, methods=["get"], permission_classes=[permissions.AllowAny])
@@ -288,11 +353,22 @@ class VideoViewSet(viewsets.ModelViewSet):
         Falls back to the best available resolution if the requested one is not found.
         """
         video = self.get_object()
-        self._check_stream_permissions(request, video)
+
+        from django.core.cache import cache
+
+        token = request.query_params.get("token")
+
+        if not token:
+            raise PermissionDenied(_("Missing stream token."))
+
+        cached_video_id = cache.get(f"stream_token_{token}")
+        if not cached_video_id or cached_video_id != video.id:
+            raise PermissionDenied(_("Invalid or expired stream token."))
 
         resolution = request.query_params.get("resolution")
         if resolution and not resolution.endswith("p"):
             resolution = f"{resolution}p"
+
         video_file_to_stream = self._get_video_file_to_stream(video, resolution)
 
         if not video_file_to_stream:
@@ -331,11 +407,13 @@ class VideoViewSet(viewsets.ModelViewSet):
         video.view_count = F("view_count") + 1
         video.save(update_fields=["view_count"])
         video.refresh_from_db()
+
         from datetime import date
 
         view_count_obj, created = video.view_counts.get_or_create(date=date.today())
         view_count_obj.count = F("count") + 1
         view_count_obj.save(update_fields=["count"])
+
         return Response({"status": "viewed", "total_count": video.view_count})
 
     @extend_schema(
@@ -411,6 +489,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         if video.status == Video.Status.RESTRICTED and video.is_auth_required:
             if not request.user.is_authenticated:
                 raise PermissionDenied(_("You must be logged in to access this video."))
+
         v4_hash = request.query_params.get("hash") or request.data.get("hash")
         if v4_hash:
             legacy_hash = hashlib.sha1(
@@ -434,6 +513,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 else None
             )
             return Response({"video_url": url})
+
         return Response({"error": _("Incorrect password or hash")}, status=403)
 
     @extend_schema(

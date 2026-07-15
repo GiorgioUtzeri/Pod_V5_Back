@@ -4,9 +4,13 @@ Esup-Pod - Info app URL configuration.
 
 from django.urls import path
 
-from .views import ConfigInfoView, SystemInfoView
+from .views import ConfigInfoView, SystemInfoView, FlatPageViewSet
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r"pages", FlatPageViewSet, basename="flatpages")
 
 urlpatterns = [
     path("", SystemInfoView.as_view(), name="system_info"),
     path("conf", ConfigInfoView.as_view(), name="config_info"),
-]
+] + router.urls

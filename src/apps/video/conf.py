@@ -101,6 +101,11 @@ class VideoConfig(BaseSettings):
         description=_("Enable video commenting system."),
         json_schema_extra={"public": True},
     )
+    show_views: bool = Field(
+        default=defaults.SHOW_VIEWS,
+        description=_("Enable the display of view counts for videos."),
+        json_schema_extra={"public": True},
+    )
     use_bulk_actions: bool = Field(
         default=defaults.USE_BULK_ACTIONS,
         description=_("Enable bulk update/delete on videos."),

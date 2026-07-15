@@ -71,6 +71,7 @@ class VideoSerializer(serializers.ModelSerializer):
     encoding_status_label = serializers.CharField(
         source="get_encoding_status_display", read_only=True
     )
+    has_video_file = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
     password = serializers.CharField(
         write_only=True, required=False, allow_blank=True, allow_null=True
@@ -116,6 +117,9 @@ class VideoSerializer(serializers.ModelSerializer):
     discipline_details = DisciplineSerializer(
         source="disciplines", many=True, read_only=True
     )
+    views = serializers.SerializerMethodField(
+        help_text=_("The number of views of the video (if enabled in config).")
+    )
 
     hyperlinks = VideoHyperlinkSerializer(many=True, read_only=True)
     contributions = ContributionSerializer(many=True, read_only=True)
@@ -146,6 +150,7 @@ class VideoSerializer(serializers.ModelSerializer):
             "status_label",
             "encoding_status",
             "encoding_status_label",
+            "has_video_file",
             "is_auth_required",
             "password",
             "thumbnail_url",
@@ -170,6 +175,7 @@ class VideoSerializer(serializers.ModelSerializer):
             "discipline_details",
             "tags",
             "hyperlinks",
+            "views",
             "contributions",
             "overlays",
             "documents",
@@ -189,9 +195,16 @@ class VideoSerializer(serializers.ModelSerializer):
             "status_label",
             "encoding_status",
             "encoding_status_label",
+            "has_video_file",
             "subtitles",
             "encodings",
+            "views",
         ]
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_has_video_file(self, obj):
+        """Returns True if the video has a source file, False otherwise."""
+        return bool(obj.video_file and obj.video_file.name)
 
     @extend_schema_field(serializers.BooleanField())
     def get_has_password(self, obj):
@@ -211,6 +224,13 @@ class VideoSerializer(serializers.ModelSerializer):
         if url and request and not url.startswith("http"):
             return request.build_absolute_uri(url)
         return url
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_views(self, obj):
+        """Returns the view count if show_views is enabled."""
+        if video_settings.show_views:
+            return obj.view_count
+        return None
 
     def validate_password(self, value):
         """Hashes the password if it is provided."""

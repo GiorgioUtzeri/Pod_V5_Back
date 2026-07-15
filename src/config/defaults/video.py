@@ -24,6 +24,7 @@ ACTIVE_VIDEO_COMMENT = True
 USE_VIDEO_ACCESS_TOKEN = False
 VIDEO_TOKEN_DEFAULT_VALIDITY_DAYS = 30
 VIDEO_TOKEN_MAX_VALIDITY_DAYS = 365
+SHOW_VIEWS = False
 USE_BULK_ACTIONS = True  # Enable bulk update/delete on videos
 BULK_ASYNC_THRESHOLD = 20  # Above this count, processing is delegated to Celery
 
