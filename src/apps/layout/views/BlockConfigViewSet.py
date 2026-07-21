@@ -3,19 +3,33 @@ Esup-Pod - BlockConfig ViewSet.
 """
 
 from rest_framework import viewsets, permissions
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from src.apps.layout.models import BlockConfig
 from src.apps.layout.serializers import BlockConfigSerializer
 from src.apps.layout.conf import layout_settings
 
 
-@extend_schema(
-    tags=["Layout Blocks"],
-    description="Endpoints to manage the visual layout blocks configuration used by the frontend.",
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Layout Blocks"],
+        summary="List all block configurations",
+        description=(
+            "Retrieve the list of all block configurations defined by the administration. "
+            "The frontend should call this endpoint upon initialization to configure its layout components."
+        ),
+        responses={200: BlockConfigSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        tags=["Layout Blocks"],
+        summary="Retrieve a specific block configuration",
+        description="Retrieve the personalization settings for a specific block using its `frontend_id`.",
+        responses={200: BlockConfigSerializer},
+    ),
 )
 class BlockConfigViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet to read and expose the layout configuration blocks.
+
     These blocks are typically managed in the Django admin and consumed by the frontend
     to dynamically build the UI components (like the homepage layout).
     """
@@ -26,29 +40,11 @@ class BlockConfigViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """
-        Return block configurations if enabled in settings, otherwise return none.
+        Return block configurations if enabled in settings, otherwise return an empty queryset.
+
+        Returns:
+            QuerySet[BlockConfig]: Filtered queryset of BlockConfig instances ordered by frontend_id.
         """
         if not layout_settings.use_layout_blocks:
             return BlockConfig.objects.none()
         return BlockConfig.objects.all().order_by("frontend_id")
-
-    @extend_schema(
-        summary="List all block configurations",
-        description=(
-            "Retrieve the list of all block configurations defined by the administration. "
-            "The frontend should call this endpoint upon initialization to configure its layout components."
-        ),
-        responses={200: BlockConfigSerializer(many=True)},
-    )
-    def list(self, request, *args, **kwargs):
-        """List blocks."""
-        return super().list(request, *args, **kwargs)
-
-    @extend_schema(
-        summary="Retrieve a specific block configuration",
-        description="Retrieve the personalization settings for a specific block using its `frontend_id`.",
-        responses={200: BlockConfigSerializer},
-    )
-    def retrieve(self, request, *args, **kwargs):
-        """Retrieve block by frontend_id."""
-        return super().retrieve(request, *args, **kwargs)
