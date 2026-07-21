@@ -4,7 +4,6 @@ Esup-Pod - File utility functions.
 
 import os
 
-
 SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"]
 
 
@@ -46,4 +45,3 @@ def resolve_file_field_image_url(file_field) -> str | None:
         return str(base_url.with_suffix(".png"))
 
     return url
-
