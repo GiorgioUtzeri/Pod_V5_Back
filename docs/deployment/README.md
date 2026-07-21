@@ -63,6 +63,7 @@ Redis is a **central component** of Pod V5. It powers four independent functions
 ```text
 Redis Instance (single node, dev)
  ├── DB 0 ── Celery Broker & Results  (CELERY_BROKER_URL / CELERY_RESULT_BACKEND)
+ │            (Background tasks: Esup-Runner task dispatching, batch video deletion, bulk imports)
  ├── DB 1 ── Django Cache             (REDIS_CACHE_URL)
  │            ├── pod:video:metadata      TTL=600s
  │            ├── pod:search:results:*    TTL=60s
