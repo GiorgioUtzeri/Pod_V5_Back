@@ -57,3 +57,4 @@ src/config/settings/*
 .pytest_cache/
 htmlcov/
 .coverage
+populate_db.py
