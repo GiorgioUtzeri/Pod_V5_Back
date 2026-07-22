@@ -26,9 +26,13 @@ class VideoManager(models.Manager):
         if user.is_authenticated and user.is_superuser:
             return self.get_queryset()
 
+        now = timezone.now()
+        pub_date_filter = Q(publication_date__isnull=True) | Q(publication_date__lte=now)
+
         if not user.is_authenticated:
-            q_filter = Q(status=self.model.Status.PUBLISHED) | (
-                Q(status=self.model.Status.RESTRICTED) & Q(is_auth_required=False)
+            q_filter = (
+                (Q(status=self.model.Status.PUBLISHED) & pub_date_filter)
+                | (Q(status=self.model.Status.RESTRICTED) & Q(is_auth_required=False) & pub_date_filter)
             )
             if not video_settings.homepage_shows_passworded:
                 q_filter &= Q(password__isnull=True) | Q(password__exact="")
@@ -36,8 +40,8 @@ class VideoManager(models.Manager):
 
         # Authenticated users
         base_q = (
-            Q(status=self.model.Status.PUBLISHED)
-            | Q(status=self.model.Status.RESTRICTED)
+            (Q(status=self.model.Status.PUBLISHED) & pub_date_filter)
+            | (Q(status=self.model.Status.RESTRICTED) & pub_date_filter)
             | Q(owner=user)
             | Q(co_owners=user)
             | Q(channel__owner=user)
@@ -285,9 +289,34 @@ class Video(models.Model):
         blank=True, help_text=_("A comma-separated list of tags.")
     )
 
+    dressing = models.ForeignKey(
+        "dressing.Dressing",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_videos",
+        verbose_name=_("Video Dressing"),
+        help_text=_("Associated habillage / overlay config for this video."),
+    )
+
+    social_networks = models.ManyToManyField(
+        "video.SocialNetwork",
+        blank=True,
+        related_name="videos",
+        verbose_name=_("Social Networks"),
+        help_text=_("Social networks enabled for sharing this video."),
+    )
+
     # 7. TIMESTAMPS
     created_at = models.DateTimeField(_("Created At"), default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+    publication_date = models.DateTimeField(
+        _("Publication Date"),
+        null=True,
+        blank=True,
+        help_text=_("Scheduled publication date for the video."),
+    )
 
     date_to_delete = models.DateField(
         _("Expiration Date"),

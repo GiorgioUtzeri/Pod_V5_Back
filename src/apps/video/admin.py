@@ -24,6 +24,8 @@ from src.apps.video.models import (
     Cursus,
     VideoHyperlink,
     VideoCut,
+    Chapter,
+    SocialNetwork,
 )
 
 
@@ -273,3 +275,24 @@ class VideoTagAdmin(tagulous.admin.TagModelAdmin):
                 "tags": queryset,
             },
         )
+
+
+@admin.register(Chapter)
+class ChapterAdmin(admin.ModelAdmin):
+    """Admin interface for Video Chapter model."""
+
+    list_display = ("video", "title", "time_start", "created_at")
+    search_fields = ("title", "video__title")
+    list_filter = ("video",)
+    ordering = ("video", "time_start")
+
+
+@admin.register(SocialNetwork)
+class SocialNetworkAdmin(admin.ModelAdmin):
+    """Admin interface for SocialNetwork model."""
+
+    list_display = ("name", "icon_name", "is_active", "order")
+    list_editable = ("is_active", "order")
+    search_fields = ("name",)
+    ordering = ("order", "name")
+

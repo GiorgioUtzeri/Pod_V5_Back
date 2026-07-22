@@ -17,6 +17,9 @@ from .License import License
 from .Cursus import Cursus
 from .VideoAccessToken import VideoAccessToken
 
+from .Chapter import Chapter
+from .SocialNetwork import SocialNetwork
+
 __all__ = [
     "Video",
     "Subtitle",
@@ -32,4 +35,6 @@ __all__ = [
     "License",
     "Cursus",
     "VideoAccessToken",
+    "Chapter",
+    "SocialNetwork",
 ]

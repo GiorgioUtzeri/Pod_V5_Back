@@ -14,6 +14,9 @@ from .DublinCoreSerializer import DublinCoreSerializer  # noqa: F401
 from .UserMarkerTimeSerializer import UserMarkerTimeSerializer  # noqa: F401
 from .VideoCutSerializer import VideoCutSerializer  # noqa: F401
 
+from .ChapterSerializer import ChapterSerializer  # noqa: F401
+from .SocialNetworkSerializer import SocialNetworkSerializer  # noqa: F401
+
 __all__ = [
     "VideoSerializer",
     "SubtitleSerializer",
@@ -26,4 +29,6 @@ __all__ = [
     "DublinCoreSerializer",
     "UserMarkerTimeSerializer",
     "VideoCutSerializer",
+    "ChapterSerializer",
+    "SocialNetworkSerializer",
 ]

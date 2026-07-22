@@ -58,7 +58,8 @@ def _create_video_from_recording(
     recording.imported_at = timezone.now()
     recording.save(update_fields=["video", "import_status", "imported_at"])
 
-    site_url = video_settings.site_url.rstrip("/")
+    from src.apps.encoding.conf import encoding_settings
+    site_url = encoding_settings.site_url.rstrip("/")
     source_url = f"{site_url}{video.video_file.url}"
     trigger_runner_encoding_task.delay(video.pk, source_url)
 

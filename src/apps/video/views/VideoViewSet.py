@@ -197,8 +197,21 @@ class VideoViewSet(viewsets.ModelViewSet):
         if video.video_file:
             from src.apps.encoding.tasks import trigger_runner_encoding_task
 
-            source_url = self.request.build_absolute_uri(video.video_file.url)
+            site_url = encoding_settings.site_url.rstrip("/")
+            source_url = f"{site_url}{video.video_file.url}"
             logger.debug("source_url: %s", source_url)
+            trigger_runner_encoding_task.delay(video.pk, source_url)
+
+    def perform_update(self, serializer):
+        previous_file = self.get_object().video_file
+        video = serializer.save()
+        if video.video_file and (not previous_file or previous_file != video.video_file):
+            from src.apps.encoding.tasks import trigger_runner_encoding_task
+            video.encoding_status = Video.EncodingStatus.PENDING
+            video.save(update_fields=["encoding_status"])
+            site_url = encoding_settings.site_url.rstrip("/")
+            source_url = f"{site_url}{video.video_file.url}"
+            logger.debug("Re-encoding source_url: %s", source_url)
             trigger_runner_encoding_task.delay(video.pk, source_url)
 
     def _is_owner_or_admin(self, user, video):
