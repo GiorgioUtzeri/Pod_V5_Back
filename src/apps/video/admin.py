@@ -295,4 +295,3 @@ class SocialNetworkAdmin(admin.ModelAdmin):
     list_editable = ("is_active", "order")
     search_fields = ("name",)
     ordering = ("order", "name")
-

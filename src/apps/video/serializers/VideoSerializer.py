@@ -250,18 +250,22 @@ class VideoSerializer(serializers.ModelSerializer):
 
         options = []
         if obj.video_file:
-            options.append({
-                "label": _("Original Quality"),
-                "resolution": "Original",
-                "url": self._get_absolute_url(obj.video_file, request),
-            })
+            options.append(
+                {
+                    "label": _("Original Quality"),
+                    "resolution": "Original",
+                    "url": self._get_absolute_url(obj.video_file, request),
+                }
+            )
         for enc in obj.encodings.all():
             if enc.file:
-                options.append({
-                    "label": enc.resolution,
-                    "resolution": enc.resolution,
-                    "url": self._get_absolute_url(enc.file, request),
-                })
+                options.append(
+                    {
+                        "label": enc.resolution,
+                        "resolution": enc.resolution,
+                        "url": self._get_absolute_url(enc.file, request),
+                    }
+                )
         return options
 
     @extend_schema_field(serializers.BooleanField())
@@ -368,9 +372,7 @@ class VideoSerializer(serializers.ModelSerializer):
         )
         if final_status == Video.Status.PUBLISHED and not has_file_after_update:
             raise serializers.ValidationError(
-                {
-                    "status": "Cannot publish a video that has no source file."
-                }
+                {"status": "Cannot publish a video that has no source file."}
             )
         return attrs
 

@@ -24,6 +24,7 @@ def trigger_encoding_for_video_ids(video_ids):
             video = Video.objects.get(pk=video_id)
             if video.video_file:
                 from src.apps.encoding.conf import encoding_settings
+
                 site_url = encoding_settings.site_url.rstrip("/")
                 source_url = f"{site_url}{video.video_file.url}"
                 logger.info(

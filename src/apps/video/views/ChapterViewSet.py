@@ -41,7 +41,9 @@ class ChapterViewSet(viewsets.ModelViewSet):
             and video.owner != user
             and not video.co_owners.filter(pk=user.pk).exists()
         ):
-            raise PermissionDenied("You do not have permission to add chapters to this video.")
+            raise PermissionDenied(
+                "You do not have permission to add chapters to this video."
+            )
 
         serializer.save()
 
@@ -54,7 +56,9 @@ class ChapterViewSet(viewsets.ModelViewSet):
             and chapter.video.owner != user
             and not chapter.video.co_owners.filter(pk=user.pk).exists()
         ):
-            raise PermissionDenied("You do not have permission to edit chapters of this video.")
+            raise PermissionDenied(
+                "You do not have permission to edit chapters of this video."
+            )
 
         serializer.save()
 
@@ -66,6 +70,8 @@ class ChapterViewSet(viewsets.ModelViewSet):
             and instance.video.owner != user
             and not instance.video.co_owners.filter(pk=user.pk).exists()
         ):
-            raise PermissionDenied("You do not have permission to delete chapters of this video.")
+            raise PermissionDenied(
+                "You do not have permission to delete chapters of this video."
+            )
 
         instance.delete()

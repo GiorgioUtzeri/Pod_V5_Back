@@ -30,9 +30,10 @@ class VideoManager(models.Manager):
         pub_date_filter = Q(publication_date__isnull=True) | Q(publication_date__lte=now)
 
         if not user.is_authenticated:
-            q_filter = (
-                (Q(status=self.model.Status.PUBLISHED) & pub_date_filter)
-                | (Q(status=self.model.Status.RESTRICTED) & Q(is_auth_required=False) & pub_date_filter)
+            q_filter = (Q(status=self.model.Status.PUBLISHED) & pub_date_filter) | (
+                Q(status=self.model.Status.RESTRICTED)
+                & Q(is_auth_required=False)
+                & pub_date_filter
             )
             if not video_settings.homepage_shows_passworded:
                 q_filter &= Q(password__isnull=True) | Q(password__exact="")

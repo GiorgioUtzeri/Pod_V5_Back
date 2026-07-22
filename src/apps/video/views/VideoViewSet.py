@@ -207,6 +207,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         video = serializer.save()
         if video.video_file and (not previous_file or previous_file != video.video_file):
             from src.apps.encoding.tasks import trigger_runner_encoding_task
+
             video.encoding_status = Video.EncodingStatus.PENDING
             video.save(update_fields=["encoding_status"])
             site_url = encoding_settings.site_url.rstrip("/")
