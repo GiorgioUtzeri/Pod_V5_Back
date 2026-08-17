@@ -371,9 +371,10 @@ class VideoSerializer(serializers.ModelSerializer):
             "status", self.instance.status if self.instance else None
         )
         if final_status == Video.Status.PUBLISHED and not has_file_after_update:
-            raise serializers.ValidationError(
-                {"status": "Cannot publish a video that has no source file."}
-            )
+            if not video_settings.webtv_mode:
+                raise serializers.ValidationError(
+                    {"status": "Cannot publish a video that has no source file."}
+                )
         return attrs
 
     def to_representation(self, instance):

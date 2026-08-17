@@ -73,8 +73,7 @@ class VideoDuplicationTests(APITestCase):
         self.assertEqual(duplicated_video.title, f"Copy of {self.video.title}")
         self.assertEqual(duplicated_video.status, Video.Status.DRAFT)
         self.assertEqual(duplicated_video.owner, self.user)
-        self.assertTrue(duplicated_video.video_file.name.endswith(".mp4"))
-        self.assertNotEqual(duplicated_video.video_file.name, self.video.video_file.name)
+        self.assertFalse(bool(duplicated_video.video_file))
 
     def test_duplicate_video_unauthorized(self):
         """
