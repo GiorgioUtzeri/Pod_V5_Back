@@ -333,6 +333,47 @@ class VideoViewSet(viewsets.ModelViewSet):
         return Response({"stream_token": token})
 
     @extend_schema(
+        summary="Créer un jeton de stream éphémère (Create an ephemeral stream token)",
+        description=(
+            "Generates a short-lived stream token (valid for 5 minutes) to access the video. "
+            "The frontend calls this endpoint immediately before loading the video player. "
+            "This allows the player to access the video stream through a simple URL "
+            "without exposing the user's primary JWT or relying on session cookies."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="Token created successfully.",
+                response={
+                    "type": "object",
+                    "properties": {"stream_token": {"type": "string"}},
+                },
+            ),
+        },
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.AllowAny],
+        url_path="create-stream-token",
+    )
+    def create_stream_token(self, request, slug=None):
+        """
+        Generates an ephemeral token (valid for 5 minutes) to securely access the stream endpoint.
+        This allows the video player to fetch the video stream using a short-lived token in the URL,
+        avoiding the need to pass the user's main JWT token or rely on session cookies.
+        """
+        video = self.get_object()
+        self._check_stream_permissions(request, video)
+
+        import uuid
+        from django.core.cache import cache
+
+        token = str(uuid.uuid4())
+        cache.set(f"stream_token_{token}", video.id, timeout=300)
+
+        return Response({"stream_token": token})
+
+    @extend_schema(
         summary="Stream video file",
         parameters=[
             OpenApiParameter(
