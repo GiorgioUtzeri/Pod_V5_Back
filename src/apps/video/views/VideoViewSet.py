@@ -295,12 +295,12 @@ class VideoViewSet(viewsets.ModelViewSet):
         return None
 
     @extend_schema(
-        summary="Créer un jeton de stream éphémère (Create an ephemeral stream token)",
+        summary="Create an ephemeral stream token",
         description=(
-            "Génère un jeton éphémère (valide 5 minutes) pour lire la vidéo. "
-            "Le front-end appelle cette route juste avant de charger le lecteur vidéo. "
-            "Cela permet d'autoriser le lecteur à lire le flux (stream) via une URL simple, "
-            "sans avoir besoin d'exposer le JWT principal de l'utilisateur ou d'utiliser des cookies."
+            "Generates an ephemeral token (valid for 5 minutes) to play the video. "
+            "The frontend calls this endpoint just before loading the video player. "
+            "This allows the player to access the video stream via a simple URL, "
+            "without needing to expose the user's main JWT or use cookies."
         ),
         responses={
             200: OpenApiResponse(
@@ -568,10 +568,10 @@ class VideoViewSet(viewsets.ModelViewSet):
     def metadata(self, request):
         """
         Returns available choices for License, Cursus, and Status to help the frontend.
-        Equivalent V4 : context_video_data() — types, disciplines, cursus, licences.
+        V4 equivalent: context_video_data() — types, disciplines, cursus, licenses.
 
-        Mis en cache Redis (TTL=600s) car ces données sont quasi-statiques.
-        Même pattern que V4 : cache.get("TYPES") / cache.set("TYPES", ..., timeout=600).
+        Cached in Redis (TTL=600s) as this data is nearly static.
+        Same pattern as V4: cache.get("TYPES") / cache.set("TYPES", ..., timeout=600).
         """
         from django.core.cache import cache
 
