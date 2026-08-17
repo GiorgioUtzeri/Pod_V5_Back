@@ -18,6 +18,7 @@ from src.apps.video.views import (
     VideoCutViewSet,
     ChapterViewSet,
     SocialNetworkViewSet,
+    ViewCountViewSet,
 )
 from src.apps.video.conf import video_settings
 
@@ -48,6 +49,9 @@ if video_settings.use_cut:
         VideoCutViewSet,
         basename="video-cut",
     )
+
+if video_settings.use_stats_view:
+    router.register(r"view-counts", ViewCountViewSet, basename="view-count")
 
 urlpatterns = router.urls
 
