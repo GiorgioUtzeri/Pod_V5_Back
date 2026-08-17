@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/collections/", include("src.apps.collection.urls")),
     path("api/layout/", include("src.apps.layout.urls")),
     path("api/", include("src.apps.search.urls")),
+    path("api/", include("src.apps.live.urls")),
     # SWAGGER
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(
