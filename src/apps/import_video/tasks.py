@@ -39,7 +39,6 @@ def _create_video_from_recording(
     from django.core.files import File
 
     from src.apps.video.models import Video
-    from src.apps.video.conf import video_settings
     from src.apps.encoding.tasks import trigger_runner_encoding_task
 
     with open(file_path, "rb") as f:

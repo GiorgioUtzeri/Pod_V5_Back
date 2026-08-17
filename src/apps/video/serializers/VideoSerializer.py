@@ -24,7 +24,7 @@ from .ChapterSerializer import ChapterSerializer
 from .SocialNetworkSerializer import SocialNetworkSerializer
 from src.apps.dressing.serializers import DressingSerializer
 from src.apps.dressing.models import Dressing
-from src.apps.video.models import SocialNetwork, Chapter
+from src.apps.video.models import SocialNetwork
 
 User = get_user_model()
 

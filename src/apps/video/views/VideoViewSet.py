@@ -142,8 +142,6 @@ class VideoViewSet(viewsets.ModelViewSet):
             .distinct()
         )
 
-
-
     @transaction.atomic
     def perform_create(self, serializer):  # noqa: C901
         """Creates a new video, checking user quota and triggering encoding."""
@@ -206,6 +204,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             trigger_runner_encoding_task.delay(video.pk, source_url)
 
     def perform_update(self, serializer):
+        """Updates an existing video, triggering re-encoding if the video file changed."""
         previous_file = self.get_object().video_file
         video = serializer.save()
         if video.video_file and (not previous_file or previous_file != video.video_file):
@@ -335,8 +334,6 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         return Response({"stream_token": token})
 
-
-
     @extend_schema(
         summary="Stream video file",
         parameters=[
@@ -428,7 +425,6 @@ class VideoViewSet(viewsets.ModelViewSet):
         video.refresh_from_db()
 
         from datetime import date
-
 
         view_count_obj, created = video.view_counts.get_or_create(date=date.today())
         view_count_obj.count = F("count") + 1

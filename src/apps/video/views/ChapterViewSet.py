@@ -4,7 +4,7 @@ Esup-Pod - Video Chapter viewset.
 
 from rest_framework import viewsets, permissions
 from rest_framework.exceptions import PermissionDenied
-from src.apps.video.models import Chapter, Video
+from src.apps.video.models import Chapter
 from src.apps.video.serializers import ChapterSerializer
 
 

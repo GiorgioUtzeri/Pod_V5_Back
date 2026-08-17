@@ -5,7 +5,6 @@ Esup-Pod - Dressing application signals.
 import logging
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
-from django.conf import settings
 
 from src.apps.dressing.models import Dressing
 

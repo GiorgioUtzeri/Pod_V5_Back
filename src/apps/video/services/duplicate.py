@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 from src.apps.video.models import Video
 from src.apps.video.services.sites import assign_default_site
 
-from .files import duplicate_source_file
 from .slug import generate_unique_slug
 
 
