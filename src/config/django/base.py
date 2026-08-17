@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "src.apps.completion",
     "src.apps.dressing",
     "src.apps.layout",
+    "src.apps.search",
     "src.apps.import_video",
 ]
 
@@ -185,6 +186,7 @@ APPS_WITH_CUSTOM_SETTINGS = [
     "collection",
     "completion",
     "layout",
+    "search",
     "import_video",
 ]
 

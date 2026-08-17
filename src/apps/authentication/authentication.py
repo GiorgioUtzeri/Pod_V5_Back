@@ -1,6 +1,4 @@
-"""
-Esup-Pod - Custom Authentication.
-"""
+"""Esup-Pod - Custom Authentication."""
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
