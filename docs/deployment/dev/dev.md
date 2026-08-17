@@ -126,6 +126,78 @@ You can access the database in two ways:
 make db-shell
 ```
 
+## 4. Remote Server Synchronization (rsync)
+
+Le plus simple est d'utiliser `rsync` via SSH pour synchroniser votre code avec un serveur de test distant.
+
+### Local → Serveur
+
+Synchroniser ton dossier local vers le serveur :
+
+```bash
+rsync -avz --delete ~/MonProjet/ utilisateur@serveur:/chemin/vers/projet/
+```
+
+Exemple (si vous n'avez pas d'accès direct à l'utilisateur `pod` mais que vous avez les droits sudo) :
+
+```bash
+rsync -avz --delete --rsync-path="sudo rsync" ~/BenjiDev/podv5/ bsere@pod3-test:/usr/local/django_projects/podv5/
+```
+
+### Serveur → Local
+
+Récupérer les modifications du serveur :
+
+```bash
+rsync -avz --delete pod@pod3-test:/usr/local/django_projects/podv5/ ~/BenjiDev/podv5/
+```
+
+### Exclure des dossiers
+
+Très utile pour ne pas écraser les environnements virtuels, `node_modules`, etc.
+
+```bash
+rsync -avz --delete \
+  --exclude=".git" \
+  --exclude=".venv" \
+  --exclude="node_modules" \
+  --exclude="media" \
+  ~/BenjiDev/podv5/ \
+  pod@pod3-test:/usr/local/django_projects/podv5/
+```
+
+### Voir ce qui va être modifié sans rien copier
+
+Ajoute `--dry-run` :
+
+```bash
+rsync -avz --delete --dry-run \
+  ~/BenjiDev/podv5/ \
+  pod@pod3-test:/usr/local/django_projects/podv5/
+```
+
+### Synchronisation automatique pendant le développement
+
+Si tu veux que chaque modification locale soit envoyée automatiquement, tu peux utiliser :
+
+```bash
+lsyncd
+```
+
+ou
+
+```bash
+entr
+```
+
+ou encore
+
+```bash
+watchexec
+```
+
+Pour un usage ponctuel, `rsync` reste la solution la plus robuste et la plus rapide.
+
 ## Further Reading
 
 - ⬅️ **[Back to Deployment Overview](../README.md)**

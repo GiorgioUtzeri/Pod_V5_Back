@@ -349,6 +349,8 @@ class Video(models.Model):
 
             overview_url = resolve_file_field_image_url(self.overview)
             if overview_url:
+                if overview_url.endswith(".vtt"):
+                    return overview_url.replace(".vtt", ".png")
                 return overview_url
 
         from django.templatetags.static import static
