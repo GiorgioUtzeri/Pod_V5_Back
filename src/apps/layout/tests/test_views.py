@@ -12,6 +12,7 @@ class BlockConfigAPITests(APITestCase):
     """Test suite for BlockConfig API endpoints."""
 
     def setUp(self):
+        """Set up test environment and create sample BlockConfig."""
         self.block_config = BlockConfig.objects.create(
             frontend_id="test-carousel",
             admin_name="Test Carousel",

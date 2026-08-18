@@ -1,3 +1,7 @@
+"""
+Admin configuration for the layout app.
+"""
+
 import json
 from django import forms
 from django.contrib import admin
@@ -13,6 +17,9 @@ class ExtraConfigWidget(forms.Widget):
     """
 
     def render(self, name, value, attrs=None, renderer=None):
+        """
+        Renders the graphical block configuration editor widget.
+        """
         if isinstance(value, str):
             try:
                 config_dict = json.loads(value)
@@ -91,7 +98,15 @@ class ExtraConfigWidget(forms.Widget):
 
 
 class BlockConfigAdminForm(forms.ModelForm):
+    """
+    Form customization for BlockConfig admin models.
+    """
+
     class Meta:
+        """
+        Meta definitions for BlockConfigAdminForm.
+        """
+
         model = BlockConfig
         fields = "__all__"
         widgets = {
