@@ -15,6 +15,7 @@ class BlockConfigSerializer(serializers.ModelSerializer):
         model = BlockConfig
         fields = [
             "frontend_id",
+            "order",
             "is_active",
             "display_title",
             "subtitle_or_text",

@@ -47,4 +47,4 @@ class BlockConfigViewSet(viewsets.ReadOnlyModelViewSet):
         """
         if not layout_settings.use_layout_blocks:
             return BlockConfig.objects.none()
-        return BlockConfig.objects.all().order_by("frontend_id")
+        return BlockConfig.objects.all().order_by("order", "frontend_id")

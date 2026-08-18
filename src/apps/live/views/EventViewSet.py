@@ -65,7 +65,7 @@ class EventViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
     search_fields = ["title", "description"]
     filterset_fields = ["broadcaster", "type", "is_draft", "is_restricted"]
-    ordering_fields = ["start_date", "end_date"]
+    ordering_fields = ["start_date", "end_date", "title", "max_viewers", "id"]
     ordering = ["start_date"]
 
     def get_queryset(self):
@@ -98,10 +98,19 @@ class EventViewSet(viewsets.ModelViewSet):
         )
 
         if self.action == "list":
-            qs = qs.filter(
-                end_date__gt=timezone.now(),
-                is_draft=False,
-            )
+            is_current_param = self.request.query_params.get("is_current")
+            if is_current_param and is_current_param.lower() in ("true", "1"):
+                now = timezone.now()
+                qs = qs.filter(
+                    start_date__lte=now,
+                    end_date__gte=now,
+                    is_draft=False,
+                )
+            else:
+                qs = qs.filter(
+                    end_date__gt=timezone.now(),
+                    is_draft=False,
+                )
 
         return qs
 

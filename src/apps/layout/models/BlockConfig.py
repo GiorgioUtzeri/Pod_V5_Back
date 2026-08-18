@@ -14,7 +14,7 @@ class BlockConfig(models.Model):
         unique=True,
         verbose_name=_("Frontend Identifier"),
         help_text=_(
-            "The strict ID used by the frontend team (e.g., 'home-carousel-latest')"
+            "The strict ID matching the frontend block component (e.g., 'webtv-hero-direct', 'collection-actu')"
         ),
     )
 
@@ -22,6 +22,12 @@ class BlockConfig(models.Model):
         max_length=150,
         verbose_name=_("Admin Name"),
         help_text=_("Readable name for the Django administration"),
+    )
+
+    order = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Order"),
+        help_text=_("Display sequence order for the frontend layout."),
     )
 
     is_active = models.BooleanField(
@@ -69,3 +75,5 @@ class BlockConfig(models.Model):
 
         verbose_name = _("Block Configuration")
         verbose_name_plural = _("Block Configurations")
+        ordering = ["order", "frontend_id"]
+
