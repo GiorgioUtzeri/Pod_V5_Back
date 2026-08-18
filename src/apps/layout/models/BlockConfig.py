@@ -76,4 +76,3 @@ class BlockConfig(models.Model):
         verbose_name = _("Block Configuration")
         verbose_name_plural = _("Block Configurations")
         ordering = ["order", "frontend_id"]
-

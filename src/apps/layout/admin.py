@@ -135,4 +135,3 @@ class BlockConfigAdmin(admin.ModelAdmin):
             },
         ),
     )
-
