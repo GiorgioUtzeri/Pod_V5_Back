@@ -7,6 +7,7 @@ from src.apps.authentication.authentication import QueryParameterJWTAuthenticati
 
 User = get_user_model()
 
+
 class CustomAuthenticationTests(TestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
