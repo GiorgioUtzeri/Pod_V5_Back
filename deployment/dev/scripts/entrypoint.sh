@@ -33,7 +33,6 @@ manage_setup() {
     log "Starting Django setup tasks..."
 
     log "Running migrations..."
-    python manage.py makemigrations --no-input
     python manage.py migrate --noinput
 
     log "Collecting static files..."
