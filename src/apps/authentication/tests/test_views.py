@@ -202,3 +202,43 @@ class OwnerPictureTests(APITestCase):
         self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
         self.owner.refresh_from_db()
         self.assertFalse(bool(self.owner.userpicture))
+
+
+class QueryParameterJWTAuthenticationTests(APITestCase):
+    """Test suite for QueryParameterJWTAuthentication."""
+
+    def test_authenticate_with_query_parameter(self):
+        """Test authentication via token in query parameter."""
+        from src.apps.authentication.authentication import QueryParameterJWTAuthentication
+        from rest_framework.test import APIRequestFactory
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        user = User.objects.create_user(username="jwtuser", password="jwtpassword")
+        token = str(AccessToken.for_user(user))
+
+        from rest_framework.request import Request
+
+        factory = APIRequestFactory()
+
+        # Test 1: Header auth works (standard JWT)
+        request_header = Request(factory.get("/", HTTP_AUTHORIZATION=f"Bearer {token}"))
+        authenticator = QueryParameterJWTAuthentication()
+        res = authenticator.authenticate(request_header)
+        self.assertIsNotNone(res)
+        self.assertEqual(res[0], user)
+
+        # Test 2: Token in query params works
+        request_query = Request(factory.get("/", {"token": token}))
+        res_query = authenticator.authenticate(request_query)
+        self.assertIsNotNone(res_query)
+        self.assertEqual(res_query[0], user)
+
+        # Test 3: Invalid token in query params returns None
+        request_invalid = Request(factory.get("/", {"token": "invalid_token"}))
+        res_invalid = authenticator.authenticate(request_invalid)
+        self.assertIsNone(res_invalid)
+
+        # Test 4: No token/headers returns None
+        request_none = Request(factory.get("/"))
+        res_none = authenticator.authenticate(request_none)
+        self.assertIsNone(res_none)

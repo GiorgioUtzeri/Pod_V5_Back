@@ -1,5 +1,5 @@
 """
-Admin configuration for the layout app.
+Esup-Pod - Admin configuration for the layout app.
 """
 
 import json

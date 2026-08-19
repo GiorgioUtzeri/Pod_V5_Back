@@ -174,3 +174,10 @@ class TestUserPopulator(TestCase):
             self.assertIsNotNone(user)
             self.assertEqual(user.username, "casuser")
             mock_run.assert_called_with("CAS", {"attr": "val"})
+
+    def test_is_staff_affiliation(self):
+        """Test is_staff_affiliation function."""
+        from src.apps.authentication.services.core import is_staff_affiliation
+
+        self.assertTrue(is_staff_affiliation("staff"))
+        self.assertFalse(is_staff_affiliation("student"))
