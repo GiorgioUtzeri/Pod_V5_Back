@@ -54,6 +54,7 @@ def trigger_runner_encoding_task(self, video_id: int, source_url: str):
         }
 
         from src.apps.video.conf import video_settings
+
         if getattr(video_settings, "use_hls", True):
             rendition_config["hls"] = {"encode_hls": True}
 
@@ -106,8 +107,11 @@ def trigger_runner_encoding_task(self, video_id: int, source_url: str):
         )
         raise
 
+
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def download_runner_files_task(self, video_id: int, task_id: str, file_list: list, thumbnail_path: str):
+def download_runner_files_task(
+    self, video_id: int, task_id: str, file_list: list, thumbnail_path: str
+):
     """
     Asynchronously download encoded files (MP4 and HLS chunks) from the runner
     manager and process them. This prevents blocking the webhook.
@@ -128,7 +132,11 @@ def download_runner_files_task(self, video_id: int, task_id: str, file_list: lis
             video.video_file.delete(save=False)
             video.video_file = None
 
-        hls_files = [f for f in file_list if f.endswith(".m3u8") or f.endswith(".ts") or f.endswith(".m4s")]
+        hls_files = [
+            f
+            for f in file_list
+            if f.endswith(".m3u8") or f.endswith(".ts") or f.endswith(".m4s")
+        ]
         mp4_files = [f for f in file_list if f.endswith(".mp4")]
 
         # Process MP4s
@@ -136,9 +144,11 @@ def download_runner_files_task(self, video_id: int, task_id: str, file_list: lis
             res = file_name.split("_")[0] if "_" in file_name else file_name.split(".")[0]
             if not res.endswith("p"):
                 res = f"{res}p"
-            
+
             encoded_video_file = client.download_task_file_to_temp(task_id, file_name)
-            encoding_obj, created = EncodingVideo.objects.get_or_create(video=video, resolution=res)
+            encoding_obj, created = EncodingVideo.objects.get_or_create(
+                video=video, resolution=res
+            )
             if not created and encoding_obj.file:
                 encoding_obj.file.delete(save=False)
             encoding_obj.file.save(encoded_video_file.name, encoded_video_file, save=True)
@@ -147,34 +157,43 @@ def download_runner_files_task(self, video_id: int, task_id: str, file_list: lis
 
         # Process HLS
         if hls_files:
-            logger.info("Found %d HLS files to download for video %s", len(hls_files), video_id)
+            logger.info(
+                "Found %d HLS files to download for video %s", len(hls_files), video_id
+            )
             hls_dir = os.path.join(settings.MEDIA_ROOT, "video", "hls", str(video_id))
             os.makedirs(hls_dir, exist_ok=True)
-            
+
             for file_name in hls_files:
                 basename = os.path.basename(file_name)
                 local_path = os.path.join(hls_dir, basename)
-                
+
                 endpoint = f"{client.url}/task/result/{task_id}/file/{file_name}"
                 import requests
-                with requests.get(endpoint, headers=client.headers, stream=True, timeout=60) as r:
+
+                with requests.get(
+                    endpoint, headers=client.headers, stream=True, timeout=60
+                ) as r:
                     r.raise_for_status()
-                    with open(local_path, 'wb') as f:
+                    with open(local_path, "wb") as f:
                         for chunk in r.iter_content(chunk_size=8192):
                             if chunk:
                                 f.write(chunk)
-                
+
                 # Register the master playlist in EncodingVideo
-                if basename == "master.m3u8" or (basename.endswith(".m3u8") and "master" in basename.lower()):
+                if basename == "master.m3u8" or (
+                    basename.endswith(".m3u8") and "master" in basename.lower()
+                ):
                     relative_path = os.path.join("video", "hls", str(video_id), basename)
-                    encoding_obj, created = EncodingVideo.objects.get_or_create(video=video, resolution="hls")
+                    encoding_obj, created = EncodingVideo.objects.get_or_create(
+                        video=video, resolution="hls"
+                    )
                     if not created and encoding_obj.file:
                         encoding_obj.file.delete(save=False)
                     # We assign the name directly to avoid hashing, because HLS files must keep their original names
                     # to resolve relative paths to .ts chunks
                     encoding_obj.file.name = relative_path
-                    encoding_obj.save(update_fields=['file'])
-                    
+                    encoding_obj.save(update_fields=["file"])
+
         # Thumbnail
         if thumbnail_path:
             if video.overview:
@@ -189,7 +208,9 @@ def download_runner_files_task(self, video_id: int, task_id: str, file_list: lis
         logger.info("Async download completed successfully for video %s", video_id)
 
     except Exception as exc:
-        logger.error("Error downloading files for video %s: %s", video_id, exc, exc_info=True)
+        logger.error(
+            "Error downloading files for video %s: %s", video_id, exc, exc_info=True
+        )
         video.encoding_status = Video.EncodingStatus.ERROR
         video.save(update_fields=["encoding_status"])
         raise self.retry(exc=exc)

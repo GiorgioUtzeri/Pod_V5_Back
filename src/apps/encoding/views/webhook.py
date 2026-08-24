@@ -133,11 +133,12 @@ class EncodingWebhookView(APIView):
 
             # Trigger async download instead of blocking the webhook thread
             from src.apps.encoding.tasks import download_runner_files_task
+
             download_runner_files_task.delay(
                 video_id=video.pk,
                 task_id=task_id,
                 file_list=file_list,
-                thumbnail_path=thumbnail_path
+                thumbnail_path=thumbnail_path,
             )
 
             # Do not mark as DONE here, the Celery task will do it when finished.

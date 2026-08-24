@@ -399,6 +399,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             basename = os.path.basename(path)
             from django.urls import reverse
             from django.http import HttpResponseRedirect
+
             url = reverse("video-hls", kwargs={"slug": video.slug, "filename": basename})
             return HttpResponseRedirect(f"{url}?token={token}")
 
@@ -408,12 +409,12 @@ class VideoViewSet(viewsets.ModelViewSet):
             # We prefix it with the internal location defined in Nginx (e.g., '/protected_media/')
             relative_path = video_file_to_stream.name
             # Ensure it doesn't have a leading slash so it joins properly
-            if relative_path.startswith('/'):
+            if relative_path.startswith("/"):
                 relative_path = relative_path[1:]
-            
+
             response = HttpResponse()
             response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
-            
+
             if relative_path.endswith(".m3u8"):
                 response["Content-Type"] = "application/vnd.apple.mpegurl"
             else:
@@ -430,15 +431,23 @@ class VideoViewSet(viewsets.ModelViewSet):
         from django.http import StreamingHttpResponse, FileResponse
 
         size = os.path.getsize(path)
-        content_type = "application/vnd.apple.mpegurl" if path.endswith(".m3u8") else ("video/mp2t" if path.endswith(".ts") or path.endswith(".m4s") else "video/mp4")
+        content_type = (
+            "application/vnd.apple.mpegurl"
+            if path.endswith(".m3u8")
+            else (
+                "video/mp2t"
+                if path.endswith(".ts") or path.endswith(".m4s")
+                else "video/mp4"
+            )
+        )
 
-        range_header = request.META.get('HTTP_RANGE', '').strip()
-        if range_header.startswith('bytes='):
-            range_match = re.match(r'bytes=(\d*)-(\d*)', range_header)
+        range_header = request.META.get("HTTP_RANGE", "").strip()
+        if range_header.startswith("bytes="):
+            range_match = re.match(r"bytes=(\d*)-(\d*)", range_header)
             if range_match:
                 start_str = range_match.group(1)
                 end_str = range_match.group(2)
-                
+
                 if start_str == "" and end_str != "":
                     # bytes=-500 -> last 500 bytes
                     start = max(0, size - int(end_str))
@@ -449,20 +458,21 @@ class VideoViewSet(viewsets.ModelViewSet):
                 else:
                     start = 0
                     end = size - 1
-                
+
                 if end >= size:
                     end = size - 1
-                    
+
                 if start > end or start >= size:
                     from django.http import HttpResponse
+
                     resp = HttpResponse(status=416)
-                    resp['Content-Range'] = f'bytes */{size}'
+                    resp["Content-Range"] = f"bytes */{size}"
                     return resp
-                
+
                 length = end - start + 1
-                
+
                 def file_iterator(file_path, start, length, chunk_size=8192):
-                    with open(file_path, 'rb') as f:
+                    with open(file_path, "rb") as f:
                         f.seek(start)
                         remaining = length
                         while remaining > 0:
@@ -472,16 +482,20 @@ class VideoViewSet(viewsets.ModelViewSet):
                             yield chunk
                             remaining -= len(chunk)
 
-                response = StreamingHttpResponse(file_iterator(path, start, length), status=206, content_type=content_type)
-                response['Content-Range'] = f'bytes {start}-{end}/{size}'
-                response['Accept-Ranges'] = 'bytes'
-                response['Content-Length'] = str(length)
+                response = StreamingHttpResponse(
+                    file_iterator(path, start, length),
+                    status=206,
+                    content_type=content_type,
+                )
+                response["Content-Range"] = f"bytes {start}-{end}/{size}"
+                response["Accept-Ranges"] = "bytes"
+                response["Content-Length"] = str(length)
                 return response
 
         file = open(path, "rb")
         response = FileResponse(file, content_type=content_type)
-        response['Accept-Ranges'] = 'bytes'
-        response['Content-Length'] = str(size)
+        response["Accept-Ranges"] = "bytes"
+        response["Content-Length"] = str(size)
         return response
 
     @extend_schema(
@@ -513,6 +527,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         # HLS files are stored in MEDIA_ROOT/video/hls/{video_id}/
         import os
         from django.conf import settings
+
         hls_dir = os.path.join(settings.MEDIA_ROOT, "video", "hls", str(video.id))
         path = os.path.join(hls_dir, filename)
 
@@ -523,7 +538,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             relative_path = f"video/hls/{video.id}/{filename}"
             response = HttpResponse()
             response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
-            
+
             if filename.endswith(".m3u8"):
                 response["Content-Type"] = "application/vnd.apple.mpegurl"
             else:
