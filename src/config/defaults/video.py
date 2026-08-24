@@ -27,6 +27,8 @@ VIDEO_TOKEN_MAX_VALIDITY_DAYS = 365
 SHOW_VIEWS = False
 USE_BULK_ACTIONS = True  # Enable bulk update/delete on videos
 BULK_ASYNC_THRESHOLD = 20  # Above this count, processing is delegated to Celery
+USE_X_ACCEL_REDIRECT = False  # Enable X-Accel-Redirect for production streaming
+USE_HLS = True  # Enable HLS encoding and streaming
 
 # UI / Display Flags
 HIDE_USER_FILTER = False

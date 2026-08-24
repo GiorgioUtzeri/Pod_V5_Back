@@ -10,7 +10,7 @@ from django.db.models import Q, F, Sum
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import gettext_lazy as _
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 
 from rest_framework import viewsets, permissions, parsers, filters, status
 from rest_framework.decorators import action
@@ -382,7 +382,7 @@ class VideoViewSet(viewsets.ModelViewSet):
             raise PermissionDenied(_("Invalid or expired stream token."))
 
         resolution = request.query_params.get("resolution")
-        if resolution and not resolution.endswith("p"):
+        if resolution and resolution != "hls" and not resolution.endswith("p"):
             resolution = f"{resolution}p"
 
         video_file_to_stream = self._get_video_file_to_stream(video, resolution)
@@ -394,10 +394,144 @@ class VideoViewSet(viewsets.ModelViewSet):
         if not os.path.exists(path):
             raise Http404(_("Video file not found on disk"))
 
+        # If the file is HLS, redirect to the HLS endpoint so relative TS chunks resolve correctly
+        if path.endswith(".m3u8"):
+            basename = os.path.basename(path)
+            from django.urls import reverse
+            from django.http import HttpResponseRedirect
+            url = reverse("video-hls", kwargs={"slug": video.slug, "filename": basename})
+            return HttpResponseRedirect(f"{url}?token={token}")
+
+        if video_settings.use_x_accel_redirect:
+            # PROD: Nginx X-Accel-Redirect (resolves Range issues instantly via sendfile)
+            # video_file_to_stream.name is the relative path (e.g. 'video/source/...')
+            # We prefix it with the internal location defined in Nginx (e.g., '/protected_media/')
+            relative_path = video_file_to_stream.name
+            # Ensure it doesn't have a leading slash so it joins properly
+            if relative_path.startswith('/'):
+                relative_path = relative_path[1:]
+            
+            response = HttpResponse()
+            response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
+            
+            if relative_path.endswith(".m3u8"):
+                response["Content-Type"] = "application/vnd.apple.mpegurl"
+            else:
+                response["Content-Type"] = "video/mp4"
+            return response
+
+        # DEV Fallback
+        return self._serve_file_with_range(request, path)
+
+    def _serve_file_with_range(self, request, path):
+        """Helper to serve files with HTTP Range support for local development without Nginx."""
+        import os
+        import re
+        from django.http import StreamingHttpResponse, FileResponse
+
+        size = os.path.getsize(path)
+        content_type = "application/vnd.apple.mpegurl" if path.endswith(".m3u8") else ("video/mp2t" if path.endswith(".ts") or path.endswith(".m4s") else "video/mp4")
+
+        range_header = request.META.get('HTTP_RANGE', '').strip()
+        if range_header.startswith('bytes='):
+            range_match = re.match(r'bytes=(\d*)-(\d*)', range_header)
+            if range_match:
+                start_str = range_match.group(1)
+                end_str = range_match.group(2)
+                
+                if start_str == "" and end_str != "":
+                    # bytes=-500 -> last 500 bytes
+                    start = max(0, size - int(end_str))
+                    end = size - 1
+                elif start_str != "":
+                    start = int(start_str)
+                    end = int(end_str) if end_str else size - 1
+                else:
+                    start = 0
+                    end = size - 1
+                
+                if end >= size:
+                    end = size - 1
+                    
+                if start > end or start >= size:
+                    from django.http import HttpResponse
+                    resp = HttpResponse(status=416)
+                    resp['Content-Range'] = f'bytes */{size}'
+                    return resp
+                
+                length = end - start + 1
+                
+                def file_iterator(file_path, start, length, chunk_size=8192):
+                    with open(file_path, 'rb') as f:
+                        f.seek(start)
+                        remaining = length
+                        while remaining > 0:
+                            chunk = f.read(min(chunk_size, remaining))
+                            if not chunk:
+                                break
+                            yield chunk
+                            remaining -= len(chunk)
+
+                response = StreamingHttpResponse(file_iterator(path, start, length), status=206, content_type=content_type)
+                response['Content-Range'] = f'bytes {start}-{end}/{size}'
+                response['Accept-Ranges'] = 'bytes'
+                response['Content-Length'] = str(length)
+                return response
+
         file = open(path, "rb")
-        response = FileResponse(file)
-        response["Content-Type"] = "video/mp4"
+        response = FileResponse(file, content_type=content_type)
+        response['Accept-Ranges'] = 'bytes'
+        response['Content-Length'] = str(size)
         return response
+
+    @extend_schema(
+        summary="Serve HLS playlist and chunks",
+        responses={200: OpenApiResponse(description="HLS chunk or playlist.")},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        permission_classes=[permissions.AllowAny],
+        url_path=r"hls/(?P<filename>.+)",
+    )
+    def hls(self, request, slug=None, filename=None):
+        """
+        Serves the HLS playlist (.m3u8) or chunk (.ts).
+        Requires the same ephemeral stream token as the MP4 stream.
+        """
+        video = self.get_object()
+        from django.core.cache import cache
+
+        token = request.query_params.get("token")
+        if not token:
+            raise PermissionDenied(_("Missing stream token."))
+
+        cached_video_id = cache.get(f"stream_token_{token}")
+        if not cached_video_id or cached_video_id != video.id:
+            raise PermissionDenied(_("Invalid or expired stream token."))
+
+        # HLS files are stored in MEDIA_ROOT/video/hls/{video_id}/
+        import os
+        from django.conf import settings
+        hls_dir = os.path.join(settings.MEDIA_ROOT, "video", "hls", str(video.id))
+        path = os.path.join(hls_dir, filename)
+
+        if not os.path.exists(path):
+            raise Http404(_("HLS file not found on disk"))
+
+        if video_settings.use_x_accel_redirect:
+            relative_path = f"video/hls/{video.id}/{filename}"
+            response = HttpResponse()
+            response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
+            
+            if filename.endswith(".m3u8"):
+                response["Content-Type"] = "application/vnd.apple.mpegurl"
+            else:
+                response["Content-Type"] = "video/mp2t"
+            return response
+
+        # DEV Fallback
+        return self._serve_file_with_range(request, path)
 
     @extend_schema(
         summary="Register a video view",

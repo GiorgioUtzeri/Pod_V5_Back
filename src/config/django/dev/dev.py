@@ -17,6 +17,7 @@ DEBUG = True
 SHOW_SQL_QUERIES = False
 CORS_ALLOW_ALL_ORIGINS = True
 ALLOWED_HOSTS = ["*"]
+USE_X_ACCEL_REDIRECT = False
 
 # Service identifier label in logs (injected by docker-compose)
 SERVICE_LABEL = os.environ.get("SERVICE_LABEL", "app").upper()
