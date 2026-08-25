@@ -2339,11 +2339,11 @@ class Command(BaseCommand):
                                     v4_id=item["id"],
                                     v5_id=None,
                                     status=MigrationMapping.Status.IGNORED,
-                                    message="Invalid timestamp or missing video"
+                                    message="Invalid timestamp or missing video",
                                 )
                             )
                             continue
-                            
+
                         instances.append(
                             Overlay(
                                 id=item["id"],
@@ -2398,7 +2398,7 @@ class Command(BaseCommand):
             return
 
         existing_video_ids = set(Video.objects.values_list("id", flat=True))
-        
+
         custom_files = {
             row["id"]: row["file"] for row in data.get("podfile_customfilemodel", [])
         }
@@ -2421,7 +2421,7 @@ class Command(BaseCommand):
                         )
                         if not file_path:
                             continue
-                            
+
                         instances.append(
                             Document(
                                 id=item["id"],
@@ -2465,7 +2465,7 @@ class Command(BaseCommand):
         existing_video_ids = set(Video.objects.values_list("id", flat=True))
         # VideoCut is a OneToOne mapping, we need to track already created video cuts in V5.
         existing_cut_v_ids = set(VideoCut.objects.values_list("video_id", flat=True))
-        
+
         success_count = 0
         error_count = 0
 
@@ -2479,9 +2479,9 @@ class Command(BaseCommand):
                         v_id = item.get("video_id")
                         if v_id not in existing_video_ids or v_id in existing_cut_v_ids:
                             continue
-                        
-                        existing_cut_v_ids.add(v_id) # Ensure only one per video
-                        
+
+                        existing_cut_v_ids.add(v_id)  # Ensure only one per video
+
                         instances.append(
                             VideoCut(
                                 video_id=v_id,
@@ -2493,7 +2493,7 @@ class Command(BaseCommand):
                             MigrationMapping(
                                 model_name="VideoCut",
                                 v4_id=item["id"],
-                                v5_id=None, # UUID in V5, leaving None
+                                v5_id=None,  # UUID in V5, leaving None
                                 status=MigrationMapping.Status.SUCCESS,
                             )
                         )
