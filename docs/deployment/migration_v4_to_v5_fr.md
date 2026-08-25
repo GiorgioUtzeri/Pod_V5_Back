@@ -100,7 +100,27 @@ python manage.py import_data_from_v4_to_v5 --file /chemin/vers/v4_exported_to_v5
 
 ---
 
-## 3. Actions Post-Migration
+## 3. Périmètre de la Migration
+
+La quasi-totalité du cœur de l'application est migrée automatiquement par le script d'importation.
+
+### ✅ Données migrées avec succès
+- **Utilisateurs & Profils** : `User`, `Owner`, Groupes, Profils de droits (`AccessGroup`, `GroupSite`).
+- **Structure Vidéo** : Vidéos, Types, Disciplines, Chaînes, Thèmes, Chapitres (`Chapter`), Coupures vidéos (`VideoCut`).
+- **Interactions & Métadonnées** : Playlists, Favoris, Commentaires (avec leur hiérarchie), Votes, Statistiques de vues.
+- **Fichiers joints** : Sous-titres, Résolutions d'encodage, Documents joints.
+- **Habillage & Configuration** : Configurations de blocs d'accueil (`BlockConfig`), Superpositions HTML (`Overlay`).
+- **Relations** : La plupart des relations "Many-To-Many" (tags, sites, accès restreints, propriétaires additionnels).
+
+### ❌ Données non-migrées
+Certains modules spécifiques de la V4 nécessitent une adaptation complète de leur logique métier en V5, ou n'ont pas encore été portés. Les données associées sont exportées par le script V4 en prévision, mais volontairement ignorées par l'importateur V5 pour le moment :
+- **Contributeurs** : L'architecture des intervenants ayant drastiquement changé entre la V4 (tables `speaker_*` et `completion_contributor`) et la V5 (nouvelle architecture `Contributor`/`Contribution`), la migration automatique de l'historique n'est pas encore disponible.
+- **Modules externes** : Les enregistrements liés aux anciens modules de visioconférence (BBB / `meeting_*`), de direct live (`live_*`), de quiz (`quiz_*`) et d'enrichissement IA (`ai_enhancement_*`) ne sont pas migrés.
+- **Habillages (Dressing)** : Les filigranes ou habillages vidéos existants ne sont pas pris en charge par l'import.
+
+---
+
+## 4. Actions Post-Migration
 
 1. **Fichiers médias** : N'oubliez pas de copier ou de rendre accessible le contenu du répertoire `MEDIA_ROOT` de votre ancienne instance Pod V4 dans le répertoire de stockage de votre instance Pod V5.
 2. **Super-utilisateur** : Si vous n'avez pas défini de variables d'environnement spécifiques, un super-utilisateur par défaut a été créé s'il n'en existait aucun :

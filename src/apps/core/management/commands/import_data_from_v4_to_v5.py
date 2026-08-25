@@ -39,6 +39,7 @@ from src.apps.collection.models import (
 from src.apps.layout.models import BlockConfig
 from src.apps.encoding.conf import encoding_settings
 from src.apps.encoding.models import EncodingVideo
+from src.apps.completion.models import Document, Overlay
 from src.apps.video.models import (
     Video,
     Type,
@@ -47,6 +48,8 @@ from src.apps.video.models import (
     Comment,
     Vote,
     Subtitle,
+    Chapter,
+    VideoCut,
 )
 from src.apps.video.signals import (
     set_video_slug,
@@ -338,6 +341,12 @@ class Command(BaseCommand):
             data.get("video_encode_transcript_encodingvideo", []),
             batch_size,
         )
+
+        # 8. Missing V5 Features (Chapters, Documents, Overlays, Cuts)
+        self.import_chapters(data.get("chapter_chapter", []), batch_size)
+        self.import_overlays(data.get("completion_overlay", []), batch_size)
+        self.import_documents(data.get("completion_document", []), data, batch_size)
+        self.import_video_cuts(data.get("cut_cutvideo", []), batch_size)
 
     # ------------------------------------------------------------------
     # Signal management
@@ -2242,4 +2251,260 @@ class Command(BaseCommand):
                 error_count += len(batch)
         self.stdout.write(
             f"Blocks imported: {success_count} success, {error_count} errors."
+        )
+
+    # ------------------------------------------------------------------
+    # Chapters
+    # ------------------------------------------------------------------
+
+    def import_chapters(self, items, batch_size):
+        """Import Chapter records from V4."""
+        self.stdout.write("Importing Chapters...")
+        items_to_process = self._get_unprocessed_items("Chapter", items)
+        if not items_to_process:
+            self.stdout.write("All Chapters already migrated.")
+            return
+
+        existing_video_ids = set(Video.objects.values_list("id", flat=True))
+        success_count = 0
+        error_count = 0
+
+        for i in range(0, len(items_to_process), batch_size):
+            batch = items_to_process[i : i + batch_size]
+            try:
+                with transaction.atomic():
+                    instances = []
+                    mappings = []
+                    for item in batch:
+                        v_id = item.get("video_id")
+                        if v_id not in existing_video_ids:
+                            continue
+                        instances.append(
+                            Chapter(
+                                id=item["id"],
+                                video_id=v_id,
+                                title=item.get("title", "")[:250],
+                                time_start=item.get("time_start", 0),
+                            )
+                        )
+                        mappings.append(
+                            MigrationMapping(
+                                model_name="Chapter",
+                                v4_id=item["id"],
+                                v5_id=item["id"],
+                                status=MigrationMapping.Status.SUCCESS,
+                            )
+                        )
+                    Chapter.objects.bulk_create(instances, ignore_conflicts=True)
+                    MigrationMapping.objects.bulk_create(mappings, ignore_conflicts=True)
+                    success_count += len(instances)
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error in Chapter batch: {e}"))
+                self._record_batch_errors("Chapter", batch, e)
+                error_count += len(batch)
+        self.stdout.write(
+            f"Chapters imported: {success_count} success, {error_count} errors."
+        )
+
+    # ------------------------------------------------------------------
+    # Overlays
+    # ------------------------------------------------------------------
+
+    def import_overlays(self, items, batch_size):
+        """Import Overlay records from V4."""
+        self.stdout.write("Importing Overlays...")
+        items_to_process = self._get_unprocessed_items("Overlay", items)
+        if not items_to_process:
+            self.stdout.write("All Overlays already migrated.")
+            return
+
+        existing_video_ids = set(Video.objects.values_list("id", flat=True))
+        success_count = 0
+        error_count = 0
+
+        for i in range(0, len(items_to_process), batch_size):
+            batch = items_to_process[i : i + batch_size]
+            try:
+                with transaction.atomic():
+                    instances = []
+                    mappings = []
+                    for item in batch:
+                        v_id = item.get("video_id")
+                        t_start = item.get("time_start", 0)
+                        t_end = item.get("time_end", 0)
+                        if v_id not in existing_video_ids or t_start >= t_end:
+                            mappings.append(
+                                MigrationMapping(
+                                    model_name="Overlay",
+                                    v4_id=item["id"],
+                                    v5_id=None,
+                                    status=MigrationMapping.Status.IGNORED,
+                                    message="Invalid timestamp or missing video"
+                                )
+                            )
+                            continue
+                            
+                        instances.append(
+                            Overlay(
+                                id=item["id"],
+                                video_id=v_id,
+                                title=item.get("title", "")[:200],
+                                time_start=t_start,
+                                time_end=t_end,
+                                content=item.get("content", ""),
+                            )
+                        )
+                        mappings.append(
+                            MigrationMapping(
+                                model_name="Overlay",
+                                v4_id=item["id"],
+                                v5_id=item["id"],
+                                status=MigrationMapping.Status.SUCCESS,
+                            )
+                        )
+                    if instances:
+                        Overlay.objects.bulk_create(instances, ignore_conflicts=True)
+                    MigrationMapping.objects.bulk_create(mappings, ignore_conflicts=True)
+                    success_count += len(instances)
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error in Overlay batch: {e}"))
+                self._record_batch_errors("Overlay", batch, e)
+                error_count += len(batch)
+        self.stdout.write(
+            f"Overlays imported: {success_count} success, {error_count} errors."
+        )
+
+    # ------------------------------------------------------------------
+    # Documents
+    # ------------------------------------------------------------------
+
+    def _validate_document_item(self, item, existing_video_ids, custom_files):
+        """Validate a document item; return file_path or None."""
+        v_id = item.get("video_id")
+        if v_id not in existing_video_ids:
+            return None
+        src_id = item.get("src_id")
+        file_path = custom_files.get(src_id)
+        if not file_path:
+            return None
+        return file_path
+
+    def import_documents(self, items, data, batch_size):
+        """Import Documents records from V4."""
+        self.stdout.write("Importing Documents...")
+        items_to_process = self._get_unprocessed_items("Document", items)
+        if not items_to_process:
+            self.stdout.write("All Documents already migrated.")
+            return
+
+        existing_video_ids = set(Video.objects.values_list("id", flat=True))
+        
+        custom_files = {
+            row["id"]: row["file"] for row in data.get("podfile_customfilemodel", [])
+        }
+        custom_files.update(
+            {row["id"]: row["file"] for row in data.get("main_customfilemodel", [])}
+        )
+
+        success_count = 0
+        error_count = 0
+
+        for i in range(0, len(items_to_process), batch_size):
+            batch = items_to_process[i : i + batch_size]
+            try:
+                with transaction.atomic():
+                    instances = []
+                    mappings = []
+                    for item in batch:
+                        file_path = self._validate_document_item(
+                            item, existing_video_ids, custom_files
+                        )
+                        if not file_path:
+                            continue
+                            
+                        instances.append(
+                            Document(
+                                id=item["id"],
+                                video_id=item.get("video_id"),
+                                title=item.get("title", "")[:250],
+                                file=file_path,
+                                is_private=False,
+                            )
+                        )
+                        mappings.append(
+                            MigrationMapping(
+                                model_name="Document",
+                                v4_id=item["id"],
+                                v5_id=item["id"],
+                                status=MigrationMapping.Status.SUCCESS,
+                            )
+                        )
+                    Document.objects.bulk_create(instances, ignore_conflicts=True)
+                    MigrationMapping.objects.bulk_create(mappings, ignore_conflicts=True)
+                    success_count += len(instances)
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error in Document batch: {e}"))
+                self._record_batch_errors("Document", batch, e)
+                error_count += len(batch)
+        self.stdout.write(
+            f"Documents imported: {success_count} success, {error_count} errors."
+        )
+
+    # ------------------------------------------------------------------
+    # VideoCuts
+    # ------------------------------------------------------------------
+
+    def import_video_cuts(self, items, batch_size):
+        """Import VideoCut records from V4."""
+        self.stdout.write("Importing VideoCuts...")
+        items_to_process = self._get_unprocessed_items("VideoCut", items)
+        if not items_to_process:
+            self.stdout.write("All VideoCuts already migrated.")
+            return
+
+        existing_video_ids = set(Video.objects.values_list("id", flat=True))
+        # VideoCut is a OneToOne mapping, we need to track already created video cuts in V5.
+        existing_cut_v_ids = set(VideoCut.objects.values_list("video_id", flat=True))
+        
+        success_count = 0
+        error_count = 0
+
+        for i in range(0, len(items_to_process), batch_size):
+            batch = items_to_process[i : i + batch_size]
+            try:
+                with transaction.atomic():
+                    instances = []
+                    mappings = []
+                    for item in batch:
+                        v_id = item.get("video_id")
+                        if v_id not in existing_video_ids or v_id in existing_cut_v_ids:
+                            continue
+                        
+                        existing_cut_v_ids.add(v_id) # Ensure only one per video
+                        
+                        instances.append(
+                            VideoCut(
+                                video_id=v_id,
+                                time_start=item.get("time_start", 0),
+                                time_end=item.get("time_end", 0),
+                            )
+                        )
+                        mappings.append(
+                            MigrationMapping(
+                                model_name="VideoCut",
+                                v4_id=item["id"],
+                                v5_id=None, # UUID in V5, leaving None
+                                status=MigrationMapping.Status.SUCCESS,
+                            )
+                        )
+                    if instances:
+                        VideoCut.objects.bulk_create(instances, ignore_conflicts=True)
+                    MigrationMapping.objects.bulk_create(mappings, ignore_conflicts=True)
+                    success_count += len(instances)
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Error in VideoCut batch: {e}"))
+                self._record_batch_errors("VideoCut", batch, e)
+                error_count += len(batch)
+        self.stdout.write(
+            f"VideoCuts imported: {success_count} success, {error_count} errors."
         )

@@ -110,6 +110,7 @@ services:
 
 - ➡️ **[Development Environment](dev/dev.md)**: Local setup instructions and Docker workflow.
 - ➡️ **[Production Deployment](prod/prod.md)**: Production setup and deployment strategies (WIP).
-- ➡️ **[Data Migration (V4 to V5)](migration_v4_to_v5.md)**: Steps and scripts to migrate your existing database and media to V5.
+- ➡️ **[Data Migration (V4 → V5)](migration_v4_to_v5_fr.md)**: Steps and scripts to migrate your existing database and media to V5.
+- ➡️ **[Data Migration (V3 → V5)](migration_v3_to_v5_fr.md)**: Complete guide for V3 to V5 migration.
 - ⬅️ **[Back to Index](../README.md)**
 
