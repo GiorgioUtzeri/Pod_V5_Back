@@ -6,19 +6,15 @@ from the runner manager.
 """
 
 import logging
-import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.exceptions import ObjectDoesNotExist
-import contextlib
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from src.apps.video.models import Video
 from config.env import env
 from src.apps.encoding.services.runner_client import get_runner_client
-from src.apps.encoding.conf import encoding_settings
-from src.apps.encoding.models import EncodingVideo
 
 logger = logging.getLogger(__name__)
 

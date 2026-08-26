@@ -6,13 +6,13 @@ This module contains tasks for triggering and retrying encoding jobs.
 
 import logging
 import json
-import requests.exceptions
+import requests
 
 from celery import shared_task
 from django.core.exceptions import ObjectDoesNotExist
 from django.urls import reverse
-from django.core.files.base import ContentFile
 import os
+from django.conf import settings
 from .conf import encoding_settings
 from config.env import env
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def trigger_runner_encoding_task(self, video_id: int, source_url: str):
+def trigger_runner_encoding_task(self, video_id: int, source_url: str):  # noqa: C901
     """
     Triggers an encoding task on the runner manager for a given video.
     Retries automatically on connection errors (up to max_retries times).
@@ -85,7 +85,7 @@ def trigger_runner_encoding_task(self, video_id: int, source_url: str):
         )
         return response
 
-    except requests.exceptions.RequestException as exc:
+    except requests.RequestException as exc:
         logger.warning(
             "Connection error while triggering encoding for video %s "
             "(attempt %s/%s): %s",
@@ -109,7 +109,7 @@ def trigger_runner_encoding_task(self, video_id: int, source_url: str):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def download_runner_files_task(
+def download_runner_files_task(  # noqa: C901
     self, video_id: int, task_id: str, file_list: list, thumbnail_path: str
 ):
     """
@@ -168,7 +168,6 @@ def download_runner_files_task(
                 local_path = os.path.join(hls_dir, basename)
 
                 endpoint = f"{client.url}/task/result/{task_id}/file/{file_name}"
-                import requests
 
                 with requests.get(
                     endpoint, headers=client.headers, stream=True, timeout=60
@@ -199,7 +198,7 @@ def download_runner_files_task(
             if video.overview:
                 video.overview.delete(save=False)
             new_overview = client.download_task_file_to_temp(task_id, thumbnail_path)
-            video.overview.save(new_overview.name, new_overview, save=False)
+            video.overview.save(new_overview.name, new_overview, save=True)
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(new_overview.file.name)
 

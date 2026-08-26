@@ -363,7 +363,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         },
     )
     @action(detail=True, methods=["get"], permission_classes=[permissions.AllowAny])
-    def stream(self, request, slug=None):
+    def stream(self, request, slug=None):  # noqa: C901
         """
         Serves the video file as a progressive stream. Supports optional resolution filtering (e.g., 360p, 720p, 1080p).
         Falls back to the best available resolution if the requested one is not found.
@@ -424,11 +424,11 @@ class VideoViewSet(viewsets.ModelViewSet):
         # DEV Fallback
         return self._serve_file_with_range(request, path)
 
-    def _serve_file_with_range(self, request, path):
+    def _serve_file_with_range(self, request, path):  # noqa: C901
         """Helper to serve files with HTTP Range support for local development without Nginx."""
         import os
         import re
-        from django.http import StreamingHttpResponse, FileResponse
+        from django.http import StreamingHttpResponse
 
         size = os.path.getsize(path)
         content_type = (
@@ -472,6 +472,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 length = end - start + 1
 
                 def file_iterator(file_path, start, length, chunk_size=8192):
+                    """Yield chunks of a file starting from a specific offset up to a certain length."""
                     with open(file_path, "rb") as f:
                         f.seek(start)
                         remaining = length
