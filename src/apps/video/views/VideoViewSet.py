@@ -152,6 +152,7 @@ class VideoViewSet(viewsets.ModelViewSet):
 
             authenticators = [QueryParameterJWTAuthentication()] + authenticators
         return authenticators
+
     @transaction.atomic
     def perform_create(self, serializer):  # noqa: C901
         """Creates a new video, checking user quota and triggering encoding."""
