@@ -119,8 +119,8 @@ class Command(BaseCommand):
         for vid_id in video_ids:
             try:
                 video = Video.objects.select_related(
-                    "owner", "type", "cursus", "language", "channel"
-                ).get(pk=vid_id)
+                    "owner", "type", "cursus", "language"
+                ).prefetch_related("channels").get(pk=vid_id)
 
                 if video.status == Video.Status.DRAFT:
                     delete_video_from_index(vid_id)
@@ -151,8 +151,9 @@ class Command(BaseCommand):
 
         # Use prefetch_related to avoid N+1 queries during document building
         qs = (
-            Video.objects.select_related("owner", "type", "cursus", "language", "channel")
+            Video.objects.select_related("owner", "type", "cursus", "language")
             .prefetch_related(
+                "channels",
                 "contributions__contributor",
                 "overlays",
                 "themes",
