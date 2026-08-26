@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "src.apps.layout",
     "src.apps.search",
     "src.apps.live",
+    "src.apps.migration",
     "src.apps.import_video",
 ]
 

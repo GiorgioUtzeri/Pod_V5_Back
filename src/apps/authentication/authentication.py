@@ -1,4 +1,4 @@
-"""Esup-Pod - Custom Authentication."""
+"""Esup-Pod - Custom authentication backends."""
 
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -11,9 +11,7 @@ class QueryParameterJWTAuthentication(JWTAuthentication):
     """
 
     def authenticate(self, request):
-        """
-        Authenticate the request using the token from the query parameter or header.
-        """
+        """Authenticate request using JWT token from header or query parameters."""
         # First try to authenticate using the standard header
         header_auth = super().authenticate(request)
         if header_auth is not None:
