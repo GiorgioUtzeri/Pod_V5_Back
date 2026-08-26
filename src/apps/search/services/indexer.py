@@ -263,13 +263,13 @@ def _build_video_document(video) -> dict:  # noqa: C901
     except Exception:
         pass
 
-    # --- Channel ---
-    channel_title = ""
-    channel_slug = ""
+    # --- Channels ---
+    channels_titles = []
+    channels_slugs = []
     try:
-        if video.channel:
-            channel_title = video.channel.title
-            channel_slug = video.channel.slug
+        for channel in video.channels.all():
+            channels_titles.append(channel.title)
+            channels_slugs.append(channel.slug)
     except Exception:
         pass
 
@@ -282,7 +282,7 @@ def _build_video_document(video) -> dict:  # noqa: C901
         "tags_text": " ".join(tags_names),
         "type_title": video.type.title if video.type else "",
         "disciplines_text": " ".join(disciplines_titles),
-        "channels_text": channel_title,
+        "channels_text": " ".join(channels_titles),
         "themes_text": " ".join(themes_titles),
         "contributors_text": " ".join(contributors_names),
         "overlays_text": " ".join(overlays_titles),
@@ -291,7 +291,7 @@ def _build_video_document(video) -> dict:  # noqa: C901
         "type_slug": video.type.slug if video.type else "",
         "tags_slug": ",".join(tags_slugs),
         "disciplines_slug": ",".join(disciplines_slugs),
-        "channels_slug": channel_slug,
+        "channels_slug": ",".join(channels_slugs),
         "themes_slug": ",".join(themes_slugs),
         "cursus_slug": video.cursus.slug if video.cursus else "",
         "main_lang": video.language.slug if video.language else "",
@@ -340,8 +340,8 @@ def index_video_by_id(video_id: int) -> bool:
 
     try:
         video = Video.objects.select_related(
-            "owner", "type", "cursus", "language", "channel"
-        ).get(pk=video_id)
+            "owner", "type", "cursus", "language"
+        ).prefetch_related("channels").get(pk=video_id)
         return index_video(video)
     except Video.DoesNotExist:
         logger.warning("Video pk=%s not found, skipping index.", video_id)
