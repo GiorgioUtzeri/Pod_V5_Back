@@ -33,12 +33,13 @@ class VideoHyperlinkViewSet(viewsets.ModelViewSet):
             return
         if request.user == video.owner or request.user in video.co_owners.all():
             return
-        # Channel permissions
-        if video.channel and (
-            video.channel.owner == request.user
-            or request.user in video.channel.collaborators.all()
-        ):
-            return
+        # Channel permissions (video can belong to several channels)
+        for channel in video.channels.all():
+            if (
+                channel.owner == request.user
+                or request.user in channel.collaborators.all()
+            ):
+                return
         raise PermissionDenied(
             "You do not have permission to manage hyperlinks for this video."
         )

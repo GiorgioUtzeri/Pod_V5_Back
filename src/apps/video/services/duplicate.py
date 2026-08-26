@@ -41,11 +41,12 @@ def duplicate_video(original: Video, user, request=None):
         language=original.language,
         thumbnail=original.thumbnail,
         status=Video.Status.DRAFT,
-        channel=original.channel,
         date_of_event=original.date_of_event,
         disable_comment=original.disable_comment,
         tags=original.get_tag_list(),
     )
+
+    duplicated.channels.set(original.channels.all())
 
     if original.sites.exists():
         duplicated.sites.set(original.sites.all())

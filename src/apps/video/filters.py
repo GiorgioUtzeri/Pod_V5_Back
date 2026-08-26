@@ -102,7 +102,7 @@ class VideoFilterSet(django_filters.FilterSet):
 
     # --- Collection ---
     channel = django_filters.NumberFilter(
-        field_name="channel_id",
+        field_name="channels__id",
         label=_("Channel ID"),
         help_text=_("Filter videos belonging to a specific channel by its database ID."),
     )

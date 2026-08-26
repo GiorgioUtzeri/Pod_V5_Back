@@ -127,9 +127,8 @@ class CollectionTests(APITestCase):
         channel = Channel.objects.create(title="Collab Channel", owner=self.admin)
         channel.collaborators.add(self.user)
 
-        video = Video.objects.create(
-            title="Collab Video", owner=self.admin, channel=channel
-        )
+        video = Video.objects.create(title="Collab Video", owner=self.admin)
+        video.channels.add(channel)
         video.video_file.save("collab.mp4", ContentFile(b"test"), save=True)
 
         self.client.force_authenticate(user=self.user)
@@ -145,8 +144,9 @@ class CollectionTests(APITestCase):
         channel = Channel.objects.create(title="C1", owner=self.user)
         theme = Theme.objects.create(title="T1")
         video = Video.objects.create(
-            title="V1", owner=self.user, channel=channel, status=Video.Status.PUBLISHED
+            title="V1", owner=self.user, status=Video.Status.PUBLISHED
         )
+        video.channels.add(channel)
         theme.videos.add(video)
 
         url = reverse("video-list")

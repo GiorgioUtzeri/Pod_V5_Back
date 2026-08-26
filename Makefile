@@ -156,3 +156,39 @@ sync-remote: ## Sync local changes to remote test server
 		--exclude=".vscode" \
 		./ $(SYNC_REMOTE_DEST)
 	$(call info,Sync completed.)
+
+# ─────────────────────────────────────────────────────────────
+# WebTV → Pod V5 Migration helpers
+# ─────────────────────────────────────────────────────────────
+WEBTV_DUMP ?= dump-webtv-202510281226.sql
+MYSQL_ROOT_PWD ?= $(MYSQL_ROOT_PASSWORD)
+
+.PHONY: setup-webtv-db migrate-webtv migrate-webtv-dry-run reindex
+
+setup-webtv-db: ## Create the 'webtv' database and import the SQL dump. Usage: make setup-webtv-db WEBTV_DUMP=<file.sql>
+	$(call info,Creating 'webtv' database in pod-db container...)
+	@docker exec -i pod-db mysql -u root -p$(MYSQL_ROOT_PWD) \
+		-e "CREATE DATABASE IF NOT EXISTS webtv CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+	$(call info,Importing dump: $(WEBTV_DUMP)...)
+	@if [ ! -f "$(WEBTV_DUMP)" ]; then \
+		echo "ERROR: SQL dump not found: $(WEBTV_DUMP)"; \
+		echo "Usage: make setup-webtv-db WEBTV_DUMP=path/to/dump.sql"; \
+		exit 1; \
+	fi
+	docker exec -i pod-db mysql -u root -p$(MYSQL_ROOT_PWD) webtv < $(WEBTV_DUMP)
+	$(call info,Import done. Run 'make migrate-webtv' to start migrating data.)
+
+migrate-webtv-dry-run: ## Simulate the WebTV migration (no DB writes). Check counts and connectivity.
+	$(call info,Running migration in DRY-RUN mode...)
+	$(DOCKER_COMPOSE_CMD) exec $(DOCKER_SERVICE_NAME) python manage.py Explosion --dry-run
+
+migrate-webtv: ## Run the full WebTV → Pod V5 data migration.
+	$(call info,Starting full WebTV migration...)
+	$(DOCKER_COMPOSE_CMD) exec $(DOCKER_SERVICE_NAME) python manage.py Explosion
+	$(call info,Migration done. Rebuilding search index...)
+	$(DOCKER_COMPOSE_CMD) exec $(DOCKER_SERVICE_NAME) python manage.py reindex_videos
+
+reindex: ## Rebuild the Redis Search index for all published videos.
+	$(call info,Reindexing all videos in Redis Search...)
+	$(DOCKER_COMPOSE_CMD) exec $(DOCKER_SERVICE_NAME) python manage.py reindex_videos
+

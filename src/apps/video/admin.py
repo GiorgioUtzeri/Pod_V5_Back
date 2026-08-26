@@ -69,7 +69,13 @@ class VideoAdmin(admin.ModelAdmin):
         "file_size_mb",
     )
     list_filter = ("status", "encoding_status", "is_360", "created_at", "sites")
-    filter_horizontal = ("sites", "disciplines", "restricted_groups", "co_owners")
+    filter_horizontal = (
+        "sites",
+        "disciplines",
+        "restricted_groups",
+        "co_owners",
+        "channels",
+    )
     search_fields = ("title", "description", "owner__username", "owner__email", "slug")
     readonly_fields = (
         "slug",
@@ -79,7 +85,7 @@ class VideoAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
-    raw_id_fields = ("owner", "channel", "license", "cursus", "language", "type")
+    raw_id_fields = ("owner", "license", "cursus", "language", "type")
     date_hierarchy = "created_at"
     inlines = [VideoHyperlinkInline, SubtitleInline]
     fieldsets = (
@@ -115,7 +121,7 @@ class VideoAdmin(admin.ModelAdmin):
             {
                 "fields": (
                     "owner",
-                    "channel",
+                    "channels",
                     "co_owners",
                     "sites",
                     "password",

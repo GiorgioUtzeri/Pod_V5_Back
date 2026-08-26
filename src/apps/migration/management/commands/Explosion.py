@@ -1,6 +1,47 @@
-"""Esup-Pod - Migration command to import legacy data."""
+"""Esup-Pod - Migration command to import legacy WebTV data into Pod V5.
+
+Usage examples:
+    # Full migration (all steps)
+    python manage.py Explosion
+
+    # Dry-run (no writes — check counts and connectivity)
+    python manage.py Explosion --dry-run
+
+    # Migrate only the first 50 videos (smoke test)
+    python manage.py Explosion --limit 50
+
+    # Run only one specific step
+    python manage.py Explosion --step videos
+    python manage.py Explosion --step users
+    python manage.py Explosion --step speakers
+    python manage.py Explosion --step hyperlinks
+    python manage.py Explosion --step documents
+    python manage.py Explosion --step groupings
+    python manage.py Explosion --step collections
+    python manage.py Explosion --step comments
+
+Prerequisites (run before the first migration):
+    1. Create the webtv database:
+       docker exec -i pod-db mysql -u root -proot_password \\
+           -e "CREATE DATABASE IF NOT EXISTS webtv;"
+
+    2. Import the dump:
+       docker exec -i pod-db mysql -u root -proot_password webtv \\
+           < dump-webtv-202510281226.sql
+
+    3. Run all migration steps:
+       docker compose -p esup-pod-back -f deployment/dev/docker-compose.yml \\
+           exec api python manage.py Explosion
+
+    4. Rebuild the search index after videos are migrated:
+       docker compose -p esup-pod-back -f deployment/dev/docker-compose.yml \\
+           exec api python manage.py reindex_videos
+"""
+
+import time
 
 from django.core.management.base import BaseCommand
+from django.db.models.signals import post_save, post_delete, pre_save
 
 from src.apps.migration.utils.userMigrate import userMigrate
 from src.apps.migration.utils.videoMigrate import videoMigrate
@@ -11,9 +52,26 @@ from src.apps.migration.utils.groupingMigrate import groupingMigrate
 from src.apps.migration.utils.collectionMigrate import collectionMigrate
 from src.apps.migration.utils.commentMigrate import commentMigrate
 
+STEPS = {
+    "users": userMigrate,
+    "videos": videoMigrate,
+    "speakers": speakerMigrate,
+    "hyperlinks": hyperlinkMigrate,
+    "documents": documentMigrate,
+    "groupings": groupingMigrate,
+    "collections": collectionMigrate,
+    "comments": commentMigrate,
+}
+
+ALL_STEPS = list(STEPS.keys())
+
 
 class Command(BaseCommand):
-    """Migration command to run all legacy data import steps in order."""
+    """Migration command to import all legacy WebTV data into Pod V5."""
+
+    help = (
+        "Migrate legacy WebTV V4 data into Pod V5 (users, videos, speakers, collections…)"
+    )
 
     def add_arguments(self, parser):
         """Define CLI arguments for the migration command."""
@@ -21,35 +79,119 @@ class Command(BaseCommand):
             "--limit",
             type=int,
             default=0,
-            help="Nombre de vidéos à migrer (défaut: 10, 0 = toutes)",
+            help="Limit the number of videos to migrate (default: 0 = all). "
+            "Useful for smoke testing: --limit 50",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            default=False,
+            help="Simulate the migration without writing anything to the database.",
+        )
+        parser.add_argument(
+            "--step",
+            type=str,
+            default=None,
+            choices=ALL_STEPS,
+            help=f"Run only one specific migration step. Choices: {', '.join(ALL_STEPS)}",
         )
 
     def handle(self, *args, **kwargs):
-        """Execute each migration step sequentially."""
-        userMigrate(self, *args, **kwargs)
-        videoMigrate(self, *args, **kwargs)
-        speakerMigrate(self, *args, **kwargs)
-        hyperlinkMigrate(self, *args, **kwargs)
-        documentMigrate(self, *args, **kwargs)
-        groupingMigrate(self, *args, **kwargs)
-        # Les tables Ze4fg_collections et Ze4fg_collection_categories sont
-        # inutilisées sur cette instance WebTV (les vraies données se trouvent dans
-        # Ze4fg_vdogrouping, déjà migrée par groupingMigrate ci-dessus), mais ce code
-        # exécute tout de même cette migration au cas où un autre environnement les utiliserait.
-        collectionMigrate(self, *args, **kwargs)
-        commentMigrate(self, *args, **kwargs)
+        """Execute migration steps with signals disabled for bulk performance."""
+        dry_run = kwargs.get("dry_run", False)
+        step = kwargs.get("step")
 
+        steps_to_run = [step] if step else ALL_STEPS
 
-# Essayer d'abord avec une petite limite. J'ai testé sans limite et la migration
-# complète a pris environ 20 minutes
+        if dry_run:
+            self.stdout.write(
+                self.style.WARNING(
+                    "=" * 60 + "\n"
+                    "  DRY-RUN MODE — aucune écriture en base de données\n"
+                    "=" * 60
+                )
+            )
 
-# Aussi, chaque fichier src/apps/migration/utils/...Migrate.py contient des explications et des
-# remarques importantes dans les commentaires en haut du fichier.
+        self.stdout.write(f"Étapes à exécuter : {', '.join(steps_to_run)}\n")
 
-# Ça peut aider pour comprendre le fonctionnement ou effectuer des modifications
-# si besoin.
+        # Disable Django signals for the entire migration to avoid:
+        # - Per-video cache flushes
+        # - Per-video search index threads
+        # - Per-video file duration extraction
+        # - Per-video site assignment queries
+        sep = "=" * 60
+        with self._bypass_signals():
+            start = time.time()
 
-# Exemple : les collections côté WebTV peuvent être multiples alors que Pod ne
-# permet qu'une seule collection. -> la on conserve uniquement la première.
+            for step_name in steps_to_run:
+                self.stdout.write(
+                    self.style.MIGRATE_HEADING(
+                        f"\n{sep}\n  STEP: {step_name.upper()}\n{sep}"
+                    )
+                )
+                step_start = time.time()
+                STEPS[step_name](self, *args, **kwargs)
+                elapsed = time.time() - step_start
+                self.stdout.write(f"  ✓ {step_name} terminé en {elapsed:.1f}s\n")
 
-# pour tester: make enter puis Python3 manage.py Explosion
+            total_elapsed = time.time() - start
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"\n{sep}\n"
+                    f"  Migration complète en {total_elapsed:.1f}s\n"
+                    f"{sep}"
+                )
+            )
+
+        if not dry_run and "videos" in steps_to_run:
+            self.stdout.write(
+                self.style.WARNING(
+                    "\n⚠️  N'oubliez pas de reconstruire l'index de recherche Redis :\n"
+                    "   python manage.py reindex_videos\n"
+                )
+            )
+
+    def _bypass_signals(self):
+        """Context manager that disconnects Video-related signals during migration."""
+        import contextlib
+
+        @contextlib.contextmanager
+        def _ctx():
+            """Disconnect Video signals, yield, then reconnect them."""
+            from src.apps.video.models import Video, Type, Subtitle
+            from src.apps.video import signals as video_signals
+
+            signals_to_pause = [
+                (post_save, Video, video_signals.set_video_slug),
+                (post_save, Video, video_signals.video_post_save),
+                (post_save, Video, video_signals.auto_assign_site_to_video),
+                (post_save, Video, video_signals.invalidate_cache_on_video_save),
+                (post_delete, Video, video_signals.auto_delete_file_on_delete),
+                (pre_save, Video, video_signals.auto_delete_file_on_change),
+                (post_delete, Video, video_signals.invalidate_cache_on_video_delete),
+                (
+                    post_delete,
+                    Subtitle,
+                    video_signals.auto_delete_subtitle_file_on_delete,
+                ),
+                (post_save, Type, video_signals.auto_assign_site_to_type),
+            ]
+
+            self.stdout.write(
+                "  [Signals] Désactivation des signaux Django pour la migration..."
+            )
+            disconnected = []
+            for signal, sender, receiver_fn in signals_to_pause:
+                if signal.disconnect(receiver_fn, sender=sender):
+                    disconnected.append((signal, sender, receiver_fn))
+            self.stdout.write(f"  [Signals] {len(disconnected)} signaux désactivés.")
+
+            try:
+                yield
+            finally:
+                self.stdout.write("  [Signals] Reconnexion des signaux Django...")
+                for signal, sender, receiver_fn in disconnected:
+                    signal.connect(receiver_fn, sender=sender, weak=False)
+                self.stdout.write(f"  [Signals] {len(disconnected)} signaux reconnectés.")
+
+        return _ctx()

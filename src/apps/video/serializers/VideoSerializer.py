@@ -93,8 +93,11 @@ class VideoSerializer(serializers.ModelSerializer):
     themes = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Theme.objects.all(), required=False
     )
-    channel = serializers.SlugRelatedField(
-        queryset=Channel.objects.all(), slug_field="slug", required=False, allow_null=True
+    channels = serializers.SlugRelatedField(
+        many=True,
+        queryset=Channel.objects.all(),
+        slug_field="slug",
+        required=False,
     )
     date_of_event = serializers.DateField(required=False, allow_null=True)
     publication_date = serializers.DateTimeField(required=False, allow_null=True)
@@ -185,7 +188,7 @@ class VideoSerializer(serializers.ModelSerializer):
             "license",
             "cursus",
             "language",
-            "channel",
+            "channels",
             "themes",
             "created_at",
             "updated_at",
@@ -396,10 +399,13 @@ class VideoSerializer(serializers.ModelSerializer):
             validated_data["password"] = ""
 
         themes_data = validated_data.pop("themes", None)
+        channels_data = validated_data.pop("channels", None)
         video = super().create(validated_data)
         if themes_data is not None:
             for theme in themes_data:
                 ThemeItem.objects.create(theme=theme, video=video)
+        if channels_data is not None:
+            video.channels.set(channels_data)
         return video
 
     def update(self, instance, validated_data):
@@ -411,9 +417,12 @@ class VideoSerializer(serializers.ModelSerializer):
             validated_data["password"] = ""
 
         themes_data = validated_data.pop("themes", None)
+        channels_data = validated_data.pop("channels", None)
         video = super().update(instance, validated_data)
         if themes_data is not None:
             ThemeItem.objects.filter(video=video).delete()
             for theme in themes_data:
                 ThemeItem.objects.create(theme=theme, video=video)
+        if channels_data is not None:
+            video.channels.set(channels_data)
         return video

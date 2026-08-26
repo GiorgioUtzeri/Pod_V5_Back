@@ -42,14 +42,17 @@ class IsOwnerOrCoOwnerOrChannelCollaborator(permissions.BasePermission):
         if obj.co_owners.filter(pk=request.user.pk).exists():
             return True
 
-        # 5. Channel Owner/Collaborator
-        if obj.channel:
-            is_channel_owner = obj.channel.owner == request.user
-            is_channel_collab = obj.channel.collaborators.filter(
-                pk=request.user.pk
-            ).exists()
-            return is_channel_owner or is_channel_collab
+        # 5. Channel Owner/Collaborator (video can belong to several channels)
+        if self._is_channel_member(request.user, obj):
+            return True
 
+        return False
+
+    def _is_channel_member(self, user, obj) -> bool:
+        """Return True if user is owner or collaborator of any of the video's channels."""
+        for channel in obj.channels.all():
+            if channel.owner == user or channel.collaborators.filter(pk=user.pk).exists():
+                return True
         return False
 
     def _check_role_scope(self, role, owner_profile, obj) -> bool:

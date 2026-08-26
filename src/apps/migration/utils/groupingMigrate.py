@@ -157,7 +157,7 @@ def _migrate_themes(self, groupings):
 def _assign_video_channels(
     self, video_groupings, channel_type_id, groupings_by_id, channel_map, video_mapping
 ):
-    """Chaque vidéo ne garde que sa Collection de plus petit id comme Video.channel."""
+    """Associe chaque vidéo à toutes ses Collections (maintenant plusieurs possible)."""
     video_channel_groupings = {}
     for video_id, grouping_id in video_groupings:
         if (
@@ -167,32 +167,25 @@ def _assign_video_channels(
             video_channel_groupings.setdefault(video_id, []).append(grouping_id)
 
     updated = 0
-    conflicts = 0
 
     for old_video_id, old_grouping_ids in video_channel_groupings.items():
         new_video_id = video_mapping.get(old_video_id)
         if not new_video_id:
             continue
 
-        old_grouping_ids.sort()
-        chosen_id = channel_map.get(old_grouping_ids[0])
-        if not chosen_id:
+        try:
+            video = Video.objects.get(id=new_video_id)
+        except Video.DoesNotExist:
             continue
 
-        if len(old_grouping_ids) > 1:
-            conflicts += 1
-            self.stdout.write(
-                self.style.WARNING(
-                    f"Video {old_video_id}: {len(old_grouping_ids)} Collections "
-                    f"({old_grouping_ids}) — seule la première (grouping "
-                    f"{old_grouping_ids[0]}) est conservée comme Channel."
-                )
-            )
+        for old_grouping_id in old_grouping_ids:
+            new_channel_id = channel_map.get(old_grouping_id)
+            if new_channel_id:
+                video.channels.add(new_channel_id)
 
-        Video.objects.filter(id=new_video_id).update(channel_id=chosen_id)
         updated += 1
 
-    return updated, conflicts
+    return updated
 
 
 def _assign_video_themes(self, video_groupings, theme_map, video_mapping):
@@ -264,7 +257,7 @@ def groupingMigrate(self, *args, **kwargs):
     t_created, t_skipped, t_errors, theme_map = _migrate_themes(self, theme_groupings)
 
     self.stdout.write("--- Association vidéos -> Channel ---")
-    video_updated, conflicts = _assign_video_channels(
+    video_updated = _assign_video_channels(
         self,
         video_groupings,
         collection_type_id,
@@ -281,8 +274,7 @@ def groupingMigrate(self, *args, **kwargs):
     self.stdout.write(
         self.style.SUCCESS(
             f"Terminé — {c_created} Channels, {t_created} Themes, "
-            f"{video_updated} vidéos affectées à un Channel "
-            f"({conflicts} avec plusieurs Collections, une seule conservée), "
+            f"{video_updated} vidéos affectées à leur(s) Channel(s), "
             f"{theme_items_created} liaisons Theme créées, "
             f"{c_skipped + t_skipped} groupings déjà migrés, "
             f"{c_errors + t_errors} erreurs"

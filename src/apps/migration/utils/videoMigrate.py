@@ -1,5 +1,4 @@
-"""Esup-Pod -
-Migration des vidéos webtv -> Pod (métadonnées uniquement, pas de copie
+"""Esup-Pod - Migration des vidéos webtv -> Pod (métadonnées uniquement, pas de copie
 physique des fichiers).
 
 - thumbnail/licence volontairement absents : webtv n'a pas de vraies
@@ -10,13 +9,18 @@ physique des fichiers).
   fiable (souvent faux même quand le fichier 1080p existe).
 - Une transaction par vidéo : une erreur sur une ligne ne doit pas faire
   échouer tout le run.
+- Les signaux Django (cache, search, site assignment) sont désactivés pendant
+  la migration pour éviter des dizaines de milliers d'opérations inutiles.
+  Un reindex_videos + make ci permettra de tout reconstruire après.
 """
 
 from html import unescape
 from html.parser import HTMLParser
 
+from django.contrib.sites.models import Site
 from django.db import IntegrityError, connections, transaction
 from django.utils import timezone
+from django.utils.text import slugify
 
 from src.apps.migration.models import UserMapping, VideoMapping
 from src.apps.video.models import Video
@@ -45,22 +49,24 @@ DEFAULT_ENCODING_STATUS = "ER"
 
 
 class _HTMLStripper(HTMLParser):
-    """Migration helper."""
+    """Strips HTML tags from a string and returns plain text."""
 
     def __init__(self):
-        """Migration helper."""
+        """Initialise the parser with an empty parts list."""
         super().__init__()
         self._parts = []
 
     def handle_data(self, data):
+        """Collect text content from HTML nodes."""
         self._parts.append(data)
 
     def get_text(self):
+        """Return accumulated plain text."""
         return " ".join(self._parts).strip()
 
 
 def strip_html(text: str) -> str:
-    """Migration helper."""
+    """Strip HTML tags and decode entities from a string."""
     if not text:
         return ""
     text = unescape(text)
@@ -75,7 +81,7 @@ def strip_html(text: str) -> str:
 
 
 def _parse_created_date(data):
-    """Migration helper."""
+    """Return a timezone-aware datetime from webtv row data, falling back to now."""
     now = timezone.now()
 
     datecreated = data.get("datecreated")
@@ -101,7 +107,7 @@ def _parse_created_date(data):
 
 
 def _build_legacy_video_path(file_directory, file_name, resolution="1080"):
-    """Migration helper."""
+    """Build the legacy webtv video file path for a given resolution."""
     # La copie physique devra vérifier l'existence réelle du fichier et
     # retomber sur 720/480/240 si le 1080p est absent.
     if not file_directory or not file_name:
@@ -115,7 +121,7 @@ def _build_legacy_video_path(file_directory, file_name, resolution="1080"):
 
 
 def _parse_video_fields(data):
-    """Construit les arguments de Video.objects.create() à partir d'une ligne webtv."""
+    """Build Video.objects.create() kwargs from a webtv row dict."""
     try:
         duration = int(float(data.get("duration") or 0))
     except Exception:
@@ -157,16 +163,26 @@ def _parse_video_fields(data):
 # -------------------------
 
 
-def videoMigrate(self, *args, **kwargs):
-    """Migration helper."""
+def videoMigrate(self, *args, **kwargs):  # noqa: C901
+    """Migrate videos from the legacy webtv database into Pod V5.
+
+    Signals are disabled during the migration to avoid:
+    - Per-video cache flushes (tens of thousands of Redis ops)
+    - Per-video search index threads (all fail: video not yet indexed)
+    - Per-video file duration extraction (files don't exist on disk)
+    - Per-video site auto-assignment queries
+
+    After migration, run:
+        python manage.py reindex_videos   # rebuild Redis Search index
+    """
+    dry_run = kwargs.get("dry_run", False)
     limit = kwargs.get("limit", 0)
 
     user_mapping = {m.old_id: m.new_id for m in UserMapping.objects.all()}
-
     migrated_ids = set(VideoMapping.objects.values_list("old_id", flat=True))
 
-    self.stdout.write(f"Users mappés: {len(user_mapping)}")
-    self.stdout.write(f"Videos déjà migrées: {len(migrated_ids)}")
+    self.stdout.write(f"Users mappés  : {len(user_mapping)}")
+    self.stdout.write(f"Vidéos déjà migrées : {len(migrated_ids)}")
 
     with connections["webtv"].cursor() as cursor:
         query = """
@@ -175,7 +191,6 @@ def videoMigrate(self, *args, **kwargs):
                    allow_comments, video_password, active, tags, is_hd, status
             FROM Ze4fg_video
         """
-
         if limit > 0:
             query += f" LIMIT {limit}"
 
@@ -183,14 +198,31 @@ def videoMigrate(self, *args, **kwargs):
         columns = [c[0] for c in cursor.description]
         rows = cursor.fetchall()
 
-    self.stdout.write(f"{len(rows)} vidéos trouvées")
+    total = len(rows)
+    self.stdout.write(f"{total} vidéos trouvées dans webtv")
+
+    if dry_run:
+        self.stdout.write(
+            self.style.WARNING("DRY-RUN activé — aucune écriture ne sera effectuée.")
+        )
 
     created_count = 0
     skipped_count = 0
     error_count = 0
     already_migrated = 0
 
-    for row in rows:
+    try:
+        current_site = Site.objects.get_current()
+    except Exception:
+        current_site = None
+
+    # --- Process each row ---
+    for i, row in enumerate(rows, start=1):
+        # Progress every 100 rows
+        if i % 100 == 0 or i == total:
+            self.stdout.write(
+                f"  [{i}/{total}] créées={created_count} skippées={skipped_count} erreurs={error_count}"
+            )
 
         data = dict(zip(columns, row))
         old_id = data["videoid"]
@@ -204,9 +236,14 @@ def videoMigrate(self, *args, **kwargs):
             skipped_count += 1
             continue
 
+        if dry_run:
+            created_count += 1
+            continue
+
         try:
             with transaction.atomic():
-                video = Video.objects.create(
+                # Build slug manually to avoid the post_save signal round-trip
+                video = Video(
                     **_parse_video_fields(data),
                     is_video=True,
                     is_360=False,
@@ -216,29 +253,50 @@ def videoMigrate(self, *args, **kwargs):
                     owner_id=new_user_id,
                     transcript_language="",
                 )
+                video.save()
+
+                # Assign slug immediately (bypass the signal)
+                if not video.slug:
+                    video.slug = f"{video.pk:04d}-{slugify(video.title)}"
+                    Video.objects.filter(pk=video.pk).update(slug=video.slug)
+
+                # Assign site (bypass the signal)
+                if current_site:
+                    video.sites.add(current_site)
 
                 VideoMapping.objects.create(old_id=old_id, new_id=video.id)
 
-                raw_tags = unescape(data.get("tags") or "")
-                if raw_tags:
-                    tag_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
+            # Tags OUTSIDE the atomic block to avoid tagulous issues inside transactions
+            raw_tags = unescape(data.get("tags") or "")
+            if raw_tags:
+                tag_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
+                if tag_list:
                     video.tags.set(tag_list)
 
-                created_count += 1
+            created_count += 1
 
         except IntegrityError:
-            # Déjà migrée par un run concurrent/précédent entre temps.
+            # Already migrated by a concurrent/previous run.
             already_migrated += 1
 
         except Exception as e:
             error_count += 1
             self.stdout.write(self.style.ERROR(f"[ERROR VIDEO {old_id}] {e}"))
 
+    prefix = "[DRY-RUN] " if dry_run else ""
     self.stdout.write(
         self.style.SUCCESS(
-            f"Terminé — {created_count} créées, "
+            f"{prefix}Terminé — {created_count} créées, "
             f"{already_migrated} déjà migrées, "
-            f"{skipped_count} skippées, "
+            f"{skipped_count} skippées (user inconnu), "
             f"{error_count} erreurs"
         )
     )
+
+    if not dry_run and created_count > 0:
+        self.stdout.write(
+            self.style.WARNING(
+                "⚠️  Pensez à relancer l'indexation Redis après la migration complète :\n"
+                "   python manage.py reindex_videos"
+            )
+        )

@@ -45,8 +45,8 @@ class VideoManager(models.Manager):
             | (Q(status=self.model.Status.RESTRICTED) & pub_date_filter)
             | Q(owner=user)
             | Q(co_owners=user)
-            | Q(channel__owner=user)
-            | Q(channel__collaborators=user)
+            | Q(channels__owner=user)
+            | Q(channels__collaborators=user)
         )
         if hasattr(user, "owner"):
             base_q |= Q(restricted_groups__users=user.owner)
@@ -148,14 +148,14 @@ class Video(models.Model):
         verbose_name=_("Owner"),
     )
 
-    channel = models.ForeignKey(
+    channels = models.ManyToManyField(
         "collection.Channel",
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="videos",
-        verbose_name=_("Channel"),
-        help_text=_("The channel this video belongs to."),
+        verbose_name=_("Channels"),
+        help_text=_(
+            "The channels this video belongs to (a video can appear in several channels)."
+        ),
     )
 
     co_owners = models.ManyToManyField(
