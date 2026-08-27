@@ -70,10 +70,14 @@ def extract_thumbnail(file_path: str, timestamp_sec: float, output_path: str) ->
         cmd = [
             "ffmpeg",
             "-y",  # overwrite output file if it exists
-            "-ss", str(timestamp_sec),
-            "-i", str(file_path),
-            "-vframes", "1",
-            "-q:v", "2",
+            "-ss",
+            str(timestamp_sec),
+            "-i",
+            str(file_path),
+            "-vframes",
+            "1",
+            "-q:v",
+            "2",
             str(output_path),
         ]
         subprocess.run(

@@ -339,9 +339,11 @@ def index_video_by_id(video_id: int) -> bool:
     from src.apps.video.models import Video
 
     try:
-        video = Video.objects.select_related(
-            "owner", "type", "cursus", "language"
-        ).prefetch_related("channels").get(pk=video_id)
+        video = (
+            Video.objects.select_related("owner", "type", "cursus", "language")
+            .prefetch_related("channels")
+            .get(pk=video_id)
+        )
         return index_video(video)
     except Video.DoesNotExist:
         logger.warning("Video pk=%s not found, skipping index.", video_id)

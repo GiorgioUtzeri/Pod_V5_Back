@@ -36,6 +36,8 @@ class BlockConfigDefaultSerializer(serializers.Serializer):
     frontend_id = serializers.CharField(max_length=100)
     admin_name = serializers.CharField(max_length=150)
     order = serializers.IntegerField(default=0)
-    display_title = serializers.CharField(allow_blank=True, allow_null=True, required=False)
+    display_title = serializers.CharField(
+        allow_blank=True, allow_null=True, required=False
+    )
     item_limit = serializers.IntegerField(default=10)
     extra_config = serializers.JSONField(default=dict)

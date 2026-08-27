@@ -144,20 +144,21 @@ class VideoViewSet(viewsets.ModelViewSet):
 
     def filter_queryset(self, queryset):
         """
-        Applies standard DRF filters, and then optionally applies 
+        Applies standard DRF filters, and then optionally applies
         the dynamic default_order from a requested Channel if applicable.
         """
         qs = super().filter_queryset(queryset)
-        
+
         # If ordering is not explicitly requested, try to use the channel's default order
         if not self.request.query_params.get("ordering"):
             channel_id = self.request.query_params.get("channel")
             if channel_id and channel_id.isdigit():
                 from src.apps.collection.models import Channel
+
                 channel = Channel.objects.filter(pk=channel_id).first()
                 if channel and channel.default_order:
                     qs = qs.order_by(channel.default_order)
-                    
+
         return qs
 
     def get_authenticators(self):
@@ -1131,40 +1132,56 @@ class VideoViewSet(viewsets.ModelViewSet):
         Extracts a thumbnail from the video at the given timestamp and saves it to the video's overview field.
         """
         video = self.get_object()
-        
+
         if not video.video_file:
-            return Response({"error": _("Video file not found.")}, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": _("Video file not found.")}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         timestamp_sec = request.data.get("timestamp")
         if timestamp_sec is None:
-            return Response({"error": _("Timestamp is required.")}, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": _("Timestamp is required.")}, status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             timestamp_sec = float(timestamp_sec)
         except ValueError:
-            return Response({"error": _("Invalid timestamp.")}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": _("Invalid timestamp.")}, status=status.HTTP_400_BAD_REQUEST
+            )
 
-        from src.apps.video.services.metadata import extract_thumbnail as generate_thumbnail
+        from src.apps.video.services.metadata import (
+            extract_thumbnail as generate_thumbnail,
+        )
         from src.apps.encoding.services.storage import get_storage_path_image
         import uuid
-        
+
         # Generate temporary filename
         ext = "jpg"
         temp_filename = f"{uuid.uuid4().hex}.{ext}"
-        
+
         # Determine actual file path in media
         rel_path = get_storage_path_image(video, temp_filename)
         abs_path = os.path.join(settings.MEDIA_ROOT, rel_path)
-        
+
         # Ensure directory exists
         os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        
+
         success = generate_thumbnail(video.video_file.path, timestamp_sec, abs_path)
-        
+
         if success:
             # Update video overview
             video.overview.name = rel_path
             video.save(update_fields=["overview"])
-            return Response({"status": "success", "thumbnail_url": request.build_absolute_uri(video.overview.url)})
-            
-        return Response({"error": _("Thumbnail extraction failed.")}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "status": "success",
+                    "thumbnail_url": request.build_absolute_uri(video.overview.url),
+                }
+            )
+
+        return Response(
+            {"error": _("Thumbnail extraction failed.")},
+            status=status.HTTP_400_BAD_REQUEST,
+        )

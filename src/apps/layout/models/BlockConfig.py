@@ -43,7 +43,9 @@ class BlockConfig(models.Model):
     admin_name = models.CharField(
         max_length=150,
         verbose_name=_("Admin Name"),
-        help_text=_("Readable label to distinguish this instance in Django administration."),
+        help_text=_(
+            "Readable label to distinguish this instance in Django administration."
+        ),
     )
 
     order = models.PositiveIntegerField(
@@ -86,7 +88,9 @@ class BlockConfig(models.Model):
         default=dict,
         blank=True,
         verbose_name=_("Extra Configuration (JSON)"),
-        help_text=_("Additional frontend-specific options (e.g., collection_type, order_by)."),
+        help_text=_(
+            "Additional frontend-specific options (e.g., collection_type, order_by)."
+        ),
     )
 
     def __str__(self):

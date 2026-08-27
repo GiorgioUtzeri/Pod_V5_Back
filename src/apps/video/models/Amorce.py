@@ -6,6 +6,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from src.apps.encoding.services.storage import get_storage_path_amorce
 
+
 class Amorce(models.Model):
     """
     Model representing an Amorce (video bumper/intro).
@@ -15,7 +16,7 @@ class Amorce(models.Model):
         _("Title"),
         max_length=250,
     )
-    
+
     video_file = models.FileField(
         _("Amorce Video File"),
         upload_to=get_storage_path_amorce,

@@ -215,31 +215,33 @@ class VideoAdmin(admin.ModelAdmin):
         Injects statistics into the video change list view for the dashboard.
         """
         from django.db.models import Sum, Count
-        
+
         # We calculate stats based on the current queryset (with filters applied)
         response = super().changelist_view(request, extra_context)
-        
+
         try:
             qs = response.context_data["cl"].queryset
         except (AttributeError, KeyError):
             return response
 
         total_videos = qs.count()
-        total_duration = qs.aggregate(total_duration=Sum('duration'))['total_duration'] or 0
-        total_views = qs.aggregate(total_views=Sum('view_count'))['total_views'] or 0
-        
+        total_duration = (
+            qs.aggregate(total_duration=Sum("duration"))["total_duration"] or 0
+        )
+        total_views = qs.aggregate(total_views=Sum("view_count"))["total_views"] or 0
+
         # Convert duration to hours/minutes
         hours = total_duration // 3600
         minutes = (total_duration % 3600) // 60
-        
+
         extra_context = extra_context or {}
-        extra_context['dashboard_stats'] = {
-            'total_videos': total_videos,
-            'total_duration_hours': hours,
-            'total_duration_minutes': minutes,
-            'total_views': total_views,
+        extra_context["dashboard_stats"] = {
+            "total_videos": total_videos,
+            "total_duration_hours": hours,
+            "total_duration_minutes": minutes,
+            "total_views": total_views,
         }
-        
+
         response.context_data.update(extra_context)
         return response
 
@@ -393,7 +395,7 @@ class VoteAdmin(admin.ModelAdmin):
 @admin.register(Video.tags.tag_model)
 class VideoTagAdmin(tagulous.admin.TagModelAdmin):
     """Admin for Video Tags."""
-    
+
     list_display = ("name", "slug", "count", "protected")
     list_filter = ("protected",)
     search_fields = ("name", "slug")

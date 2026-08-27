@@ -17,6 +17,7 @@ def _hash_filename(filename: str) -> str:
     Example: 8ab2c44298fc1c149afbf4c8996fb92427ae41e4.mp4
     """
     from django.utils.text import slugify
+
     ext = filename.split(".")[-1].lower() if "." in filename else ""
     ext = slugify(ext)
     file_uuid = uuid.uuid4().hex

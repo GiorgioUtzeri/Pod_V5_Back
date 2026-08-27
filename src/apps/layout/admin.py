@@ -9,10 +9,10 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from src.apps.layout.models import BlockConfig, BlockType
 
-
 # ---------------------------------------------------------------------------
 # BlockType admin — READ ONLY (registered by the frontend automatically)
 # ---------------------------------------------------------------------------
+
 
 @admin.register(BlockType)
 class BlockTypeAdmin(admin.ModelAdmin):
@@ -25,8 +25,13 @@ class BlockTypeAdmin(admin.ModelAdmin):
     list_display = ("name", "frontend_id", "version", "updated_at")
     search_fields = ("name", "frontend_id")
     readonly_fields = (
-        "frontend_id", "name", "description", "fields_schema", "version",
-        "created_at", "updated_at",
+        "frontend_id",
+        "name",
+        "description",
+        "fields_schema",
+        "version",
+        "created_at",
+        "updated_at",
     )
     ordering = ("name",)
 
@@ -43,6 +48,7 @@ class BlockTypeAdmin(admin.ModelAdmin):
 # ---------------------------------------------------------------------------
 # BlockConfig admin — writable, with dynamic extra_config editor
 # ---------------------------------------------------------------------------
+
 
 class DynamicExtraConfigWidget(forms.Widget):
     """
@@ -149,7 +155,14 @@ class BlockConfigAdmin(admin.ModelAdmin):
     """Admin configuration for BlockConfig (block instances on pages)."""
 
     form = BlockConfigAdminForm
-    list_display = ("order", "admin_name", "frontend_id", "is_active", "item_limit", "block_type")
+    list_display = (
+        "order",
+        "admin_name",
+        "frontend_id",
+        "is_active",
+        "item_limit",
+        "block_type",
+    )
     list_filter = ("is_active", "block_type")
     search_fields = ("admin_name", "frontend_id", "display_title")
     autocomplete_fields = []
@@ -158,7 +171,13 @@ class BlockConfigAdmin(admin.ModelAdmin):
         (
             _("Identification"),
             {
-                "fields": ("admin_name", "block_type", "frontend_id", "order", "is_active"),
+                "fields": (
+                    "admin_name",
+                    "block_type",
+                    "frontend_id",
+                    "order",
+                    "is_active",
+                ),
                 "description": _(
                     "ℹ️ Choose a Block Type (registered by the frontend) to know what "
                     "this block can display. The Frontend Identifier must match exactly."

@@ -8,7 +8,10 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from src.apps.layout.models import BlockConfig, BlockType
-from src.apps.layout.serializers import BlockConfigSerializer, BlockConfigDefaultSerializer
+from src.apps.layout.serializers import (
+    BlockConfigSerializer,
+    BlockConfigDefaultSerializer,
+)
 from src.apps.layout.conf import layout_settings
 from src.apps.layout.utils import is_internal_request
 
@@ -78,9 +81,7 @@ class BlockConfigViewSet(viewsets.ReadOnlyModelViewSet):
         results = []
         for item in serializer.validated_data:
             # Resolve block_type FK if the BlockType has been registered
-            block_type = BlockType.objects.filter(
-                frontend_id=item["frontend_id"]
-            ).first()
+            block_type = BlockType.objects.filter(frontend_id=item["frontend_id"]).first()
 
             obj, created = BlockConfig.objects.get_or_create(
                 admin_name=item["admin_name"],
