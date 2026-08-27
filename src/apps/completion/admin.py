@@ -8,6 +8,7 @@ from src.apps.completion.models import (
     Contribution,
     Document,
     Overlay,
+    SpeakerJob,
 )
 
 
@@ -16,9 +17,17 @@ class ContributionInline(admin.TabularInline):
 
     model = Contribution
     extra = 0
-    raw_id_fields = ("video",)
-    fields = ("video", "role", "job_title")
+    raw_id_fields = ("video", "speaker_job")
+    fields = ("video", "role", "job_title", "speaker_job")
     show_change_link = True
+
+
+@admin.register(SpeakerJob)
+class SpeakerJobAdmin(admin.ModelAdmin):
+    """Admin interface for SpeakerJob model."""
+
+    list_display = ("title", "created_at")
+    search_fields = ("title", "description")
 
 
 @admin.register(Contributor)
@@ -35,10 +44,10 @@ class ContributorAdmin(admin.ModelAdmin):
 class ContributionAdmin(admin.ModelAdmin):
     """Admin interface for Contribution model (link between video and contributor)."""
 
-    list_display = ("video", "contributor", "role", "job_title")
+    list_display = ("video", "contributor", "role", "job_title", "speaker_job")
     search_fields = ("video__title", "contributor__last_name", "contributor__first_name")
     list_filter = ("role",)
-    raw_id_fields = ("video", "contributor")
+    raw_id_fields = ("video", "contributor", "speaker_job")
 
 
 @admin.register(Document)

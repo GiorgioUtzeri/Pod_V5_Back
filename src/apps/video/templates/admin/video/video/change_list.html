@@ -1,0 +1,24 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content %}
+    {% if dashboard_stats %}
+    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; display: flex; justify-content: space-around; border: 1px solid #ddd;">
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px; color: #333;">{% trans "Total Videos" %}</h3>
+            <p style="font-size: 1.5em; margin: 0; color: #007bff; font-weight: bold;">{{ dashboard_stats.total_videos }}</p>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px; color: #333;">{% trans "Total Duration" %}</h3>
+            <p style="font-size: 1.5em; margin: 0; color: #28a745; font-weight: bold;">
+                {{ dashboard_stats.total_duration_hours }}h {{ dashboard_stats.total_duration_minutes }}m
+            </p>
+        </div>
+        <div style="text-align: center;">
+            <h3 style="margin-bottom: 5px; color: #333;">{% trans "Total Views" %}</h3>
+            <p style="font-size: 1.5em; margin: 0; color: #dc3545; font-weight: bold;">{{ dashboard_stats.total_views }}</p>
+        </div>
+    </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

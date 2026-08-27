@@ -20,6 +20,8 @@ from .VideoAccessToken import VideoAccessToken
 from .Chapter import Chapter
 from .SocialNetwork import SocialNetwork
 
+from .Amorce import Amorce
+
 __all__ = [
     "Video",
     "Subtitle",
@@ -37,4 +39,5 @@ __all__ = [
     "VideoAccessToken",
     "Chapter",
     "SocialNetwork",
+    "Amorce",
 ]

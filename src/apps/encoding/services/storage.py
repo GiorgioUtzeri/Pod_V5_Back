@@ -16,7 +16,9 @@ def _hash_filename(filename: str) -> str:
     Hash the filename to prevent predictability and obscure the physical file.
     Example: 8ab2c44298fc1c149afbf4c8996fb92427ae41e4.mp4
     """
+    from django.utils.text import slugify
     ext = filename.split(".")[-1].lower() if "." in filename else ""
+    ext = slugify(ext)
     file_uuid = uuid.uuid4().hex
     hashed_name = hashlib.sha1(f"{file_uuid}-{filename}".encode("utf-8")).hexdigest()
     return f"{hashed_name}.{ext}" if ext else hashed_name
@@ -102,6 +104,19 @@ def get_storage_path_document(instance, filename: str) -> str:
     return os.path.join(
         "video",
         "documents",
+        timezone.now().strftime("%Y/%m/%d"),
+        _hash_filename(filename),
+    )
+
+
+def get_storage_path_amorce(instance, filename: str) -> str:
+    """
+    Generates the storage path for amorces (bumpers).
+    Format: video/amorces/%Y/%m/%d/hash.ext
+    """
+    return os.path.join(
+        "video",
+        "amorces",
         timezone.now().strftime("%Y/%m/%d"),
         _hash_filename(filename),
     )

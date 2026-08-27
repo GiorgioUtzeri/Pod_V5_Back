@@ -37,7 +37,16 @@ class Contribution(models.Model):
         max_length=200,
         blank=True,
         null=True,
-        verbose_name=_("Job title"),
+        verbose_name=_("Job title (Legacy)"),
+        help_text=_("Legacy text field. Use speaker_job instead if possible."),
+    )
+    speaker_job = models.ForeignKey(
+        "completion.SpeakerJob",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="contributions",
+        verbose_name=_("Speaker Job"),
         help_text=_("Only used if role is 'speaker'"),
     )
 

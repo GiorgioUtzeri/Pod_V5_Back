@@ -7,21 +7,43 @@ from django.utils.translation import gettext_lazy as _
 
 
 class BlockConfig(models.Model):
-    """Model to store configuration for frontend visual blocks."""
+    """
+    A concrete *instance* of a block placed on a page.
+
+    Admins create these in Django admin by choosing a block type and configuring
+    its parameters (title, item_limit, extra_config, etc.).
+    Multiple instances of the same `frontend_id` (block type) can coexist on a page
+    with different configurations (e.g., two collection blocks — one for channels,
+    one for themes).
+    """
+
+    block_type = models.ForeignKey(
+        "layout.BlockType",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="instances",
+        verbose_name=_("Block Type"),
+        help_text=_(
+            "The block type this instance is based on. "
+            "Drives the visual configuration editor in admin."
+        ),
+    )
 
     frontend_id = models.CharField(
         max_length=100,
-        unique=True,
+        db_index=True,
         verbose_name=_("Frontend Identifier"),
         help_text=_(
-            "The strict ID matching the frontend block component (e.g., 'webtv-hero-direct', 'collection-actu')"
+            "The ID matching the frontend block component (e.g., 'collection-block'). "
+            "Multiple instances of the same frontend_id are allowed."
         ),
     )
 
     admin_name = models.CharField(
         max_length=150,
         verbose_name=_("Admin Name"),
-        help_text=_("Readable name for the Django administration"),
+        help_text=_("Readable label to distinguish this instance in Django administration."),
     )
 
     order = models.PositiveIntegerField(
@@ -64,11 +86,11 @@ class BlockConfig(models.Model):
         default=dict,
         blank=True,
         verbose_name=_("Extra Configuration (JSON)"),
-        help_text=_("Additional frontend-specific options (e.g., auto_play: true)."),
+        help_text=_("Additional frontend-specific options (e.g., collection_type, order_by)."),
     )
 
     def __str__(self):
-        return f"{self.admin_name} ({self.frontend_id})"
+        return f"[{self.order}] {self.admin_name} ({self.frontend_id})"
 
     class Meta:
         """Meta options."""

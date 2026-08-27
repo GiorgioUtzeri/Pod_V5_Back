@@ -140,6 +140,42 @@ class Video(models.Model):
         help_text=_("Check if this is a 360-degree immersive video."),
     )
 
+    # 3.5 WEB TV ENCODING SETTINGS
+    class WebTVFormat(models.TextChoices):
+        FORMAT_16_9 = "16/9", "16/9"
+        FORMAT_4_3 = "4/3", "4/3"
+        FORMAT_SQUARE = "SQUARE", _("Square")
+        FORMAT_PORTRAIT = "PORTRAIT", _("Portrait")
+
+    class WebTVQuality(models.TextChoices):
+        STANDARD = "STD", _("Standard")
+        QUALITY_4K = "4K", "4K"
+        QUALITY_8K = "8K", "8K"
+
+    webtv_format = models.CharField(
+        _("Web TV Format"),
+        max_length=15,
+        choices=WebTVFormat.choices,
+        default=WebTVFormat.FORMAT_16_9,
+        help_text=_("Proportions to apply for Web TV encoding."),
+    )
+
+    webtv_quality = models.CharField(
+        _("Web TV Quality"),
+        max_length=10,
+        choices=WebTVQuality.choices,
+        default=WebTVQuality.STANDARD,
+        help_text=_("Quality to apply for Web TV encoding."),
+    )
+
+    amorces = models.ManyToManyField(
+        "video.Amorce",
+        blank=True,
+        related_name="videos",
+        verbose_name=_("Amorces"),
+        help_text=_("Select intro bumpers/amorces to prepend to the video."),
+    )
+
     # 4. OWNERSHIP & ACCESS
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -127,6 +127,11 @@ class CollectionConfig(BaseSettings):
         description=_("Default ordering field for collections."),
         json_schema_extra={"public": True},
     )
+    enable_frontend_collection_sorting: bool = Field(
+        default=defaults.ENABLE_FRONTEND_COLLECTION_SORTING,
+        description=_("Enable frontend collection sorting."),
+        json_schema_extra={"public": True},
+    )
 
     model_config = SettingsConfigDict(
         case_sensitive=False,

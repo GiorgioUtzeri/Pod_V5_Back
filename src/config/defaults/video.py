@@ -30,6 +30,14 @@ BULK_ASYNC_THRESHOLD = 20  # Above this count, processing is delegated to Celery
 USE_X_ACCEL_REDIRECT = False  # Enable X-Accel-Redirect for production streaming
 USE_HLS = True  # Enable HLS encoding and streaming
 
+# Web TV Feature Flags
+ENABLE_VIDEO_CHAPTERS = True
+ENABLE_ADAPTIVE_STREAMING = True
+ENABLE_MULTI_LANGUAGE = True
+ENABLE_SOCIAL_SHARING = True
+ENABLE_VIDEO_DOWNLOAD = True
+ALLOWED_SUBTITLE_FORMATS = ['srt', 'vtt', 'txt']
+
 # UI / Display Flags
 HIDE_USER_FILTER = False
 HIDE_TAGS = False

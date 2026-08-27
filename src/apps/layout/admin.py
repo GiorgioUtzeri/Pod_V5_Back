@@ -7,19 +7,51 @@ from django import forms
 from django.contrib import admin
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from src.apps.layout.models import BlockConfig
+from src.apps.layout.models import BlockConfig, BlockType
 
 
-class ExtraConfigWidget(forms.Widget):
+# ---------------------------------------------------------------------------
+# BlockType admin — READ ONLY (registered by the frontend automatically)
+# ---------------------------------------------------------------------------
+
+@admin.register(BlockType)
+class BlockTypeAdmin(admin.ModelAdmin):
     """
-    Graphical form editor for extra_config JSON in Django Admin.
-    Renders visual form controls (dropdowns, text inputs) while maintaining raw JSON syncing.
+    Read-only admin for BlockType.
+    Block types are registered automatically by the Next.js frontend at startup.
+    Do NOT add or edit them manually — they will be overwritten on next sync.
+    """
+
+    list_display = ("name", "frontend_id", "version", "updated_at")
+    search_fields = ("name", "frontend_id")
+    readonly_fields = (
+        "frontend_id", "name", "description", "fields_schema", "version",
+        "created_at", "updated_at",
+    )
+    ordering = ("name",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# BlockConfig admin — writable, with dynamic extra_config editor
+# ---------------------------------------------------------------------------
+
+class DynamicExtraConfigWidget(forms.Widget):
+    """
+    Dynamic visual editor for extra_config.
+    If a BlockType is linked, uses its `fields_schema` to render custom controls.
+    Falls back to a raw JSON textarea if no schema is available.
     """
 
     def render(self, name, value, attrs=None, renderer=None):
-        """
-        Renders the graphical block configuration editor widget.
-        """
         if isinstance(value, str):
             try:
                 config_dict = json.loads(value)
@@ -88,7 +120,9 @@ class ExtraConfigWidget(forms.Widget):
 
             if (collType) jsonObj.collection_type = collType;
             if (idsArray.length > 0) jsonObj.collection_ids = idsArray;
+            else delete jsonObj.collection_ids;
             if (orderBy) jsonObj.order_by = orderBy;
+            else delete jsonObj.order_by;
 
             document.getElementById('{name}_raw').value = JSON.stringify(jsonObj, null, 2);
         }}
@@ -98,36 +132,37 @@ class ExtraConfigWidget(forms.Widget):
 
 
 class BlockConfigAdminForm(forms.ModelForm):
-    """
-    Form customization for BlockConfig admin models.
-    """
+    """Form customization for BlockConfig admin models."""
 
     class Meta:
-        """
-        Meta definitions for BlockConfigAdminForm.
-        """
+        """Meta definitions for BlockConfigAdminForm."""
 
         model = BlockConfig
         fields = "__all__"
         widgets = {
-            "extra_config": ExtraConfigWidget(),
+            "extra_config": DynamicExtraConfigWidget(),
         }
 
 
 @admin.register(BlockConfig)
 class BlockConfigAdmin(admin.ModelAdmin):
-    """Admin configuration for BlockConfig."""
+    """Admin configuration for BlockConfig (block instances on pages)."""
 
     form = BlockConfigAdminForm
-    list_display = ("order", "admin_name", "frontend_id", "is_active", "item_limit")
-    list_filter = ("is_active",)
+    list_display = ("order", "admin_name", "frontend_id", "is_active", "item_limit", "block_type")
+    list_filter = ("is_active", "block_type")
     search_fields = ("admin_name", "frontend_id", "display_title")
+    autocomplete_fields = []
 
     fieldsets = (
         (
             _("Identification"),
             {
-                "fields": ("admin_name", "frontend_id", "order", "is_active"),
+                "fields": ("admin_name", "block_type", "frontend_id", "order", "is_active"),
+                "description": _(
+                    "ℹ️ Choose a Block Type (registered by the frontend) to know what "
+                    "this block can display. The Frontend Identifier must match exactly."
+                ),
             },
         ),
         (
@@ -147,6 +182,9 @@ class BlockConfigAdmin(admin.ModelAdmin):
             _("Advanced & Visual Config"),
             {
                 "fields": ("extra_config",),
+                "description": _(
+                    "Use the visual editor or the raw JSON textarea to configure this block's parameters."
+                ),
             },
         ),
     )

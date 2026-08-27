@@ -61,6 +61,40 @@ def extract_video_duration(file_path):
         return 0
 
 
+def extract_thumbnail(file_path: str, timestamp_sec: float, output_path: str) -> bool:
+    """
+    Extracts a frame from the video at the given timestamp (in seconds) and saves it to output_path.
+    Returns True if successful, False otherwise.
+    """
+    try:
+        cmd = [
+            "ffmpeg",
+            "-y",  # overwrite output file if it exists
+            "-ss", str(timestamp_sec),
+            "-i", str(file_path),
+            "-vframes", "1",
+            "-q:v", "2",
+            str(output_path),
+        ]
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return True
+    except FileNotFoundError:
+        logger.warning("ffmpeg not found. Cannot extract thumbnail from %s.", file_path)
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.warning(
+            "ffmpeg returned a non-zero exit code for %s: %s",
+            file_path,
+            e.stderr,
+        )
+        return False
+
+
 def calculate_expiration_date(owner):
     """
     Calculates the deletion date based on the user's affiliation.

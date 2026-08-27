@@ -41,6 +41,35 @@ class VideoConfig(BaseSettings):
         description=_("Enable WebTV mode (channel-based display)."),
         json_schema_extra={"public": True},
     )
+    enable_video_chapters: bool = Field(
+        default=defaults.ENABLE_VIDEO_CHAPTERS,
+        description=_("Enable video chapters in player."),
+        json_schema_extra={"public": True},
+    )
+    enable_adaptive_streaming: bool = Field(
+        default=defaults.ENABLE_ADAPTIVE_STREAMING,
+        description=_("Enable adaptive streaming options."),
+        json_schema_extra={"public": True},
+    )
+    enable_multi_language: bool = Field(
+        default=defaults.ENABLE_MULTI_LANGUAGE,
+        description=_("Enable multi-language options for audio/subtitles."),
+        json_schema_extra={"public": True},
+    )
+    enable_social_sharing: bool = Field(
+        default=defaults.ENABLE_SOCIAL_SHARING,
+        description=_("Enable social sharing options."),
+        json_schema_extra={"public": True},
+    )
+    enable_video_download: bool = Field(
+        default=defaults.ENABLE_VIDEO_DOWNLOAD,
+        description=_("Enable video download option."),
+        json_schema_extra={"public": True},
+    )
+    allowed_subtitle_formats: list = Field(
+        default_factory=lambda: defaults.ALLOWED_SUBTITLE_FORMATS,
+        description=_("List of allowed subtitle file formats."),
+    )
     use_duplicate: bool = Field(
         default=defaults.USE_DUPLICATE,
         description=_("Enable video form duplication."),
