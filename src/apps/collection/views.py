@@ -5,7 +5,7 @@ Esup-Pod - Viewsets for distinct collection models.
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     extend_schema,
@@ -24,7 +24,9 @@ from src.apps.collection.models import (
 from src.apps.collection.serializers import (
     ChannelSerializer,
     ThemeSerializer,
+    ThemeListSerializer,
     PlaylistSerializer,
+    PlaylistListSerializer,
     FavoriteSerializer,
 )
 from src.apps.collection.permissions import (
@@ -76,6 +78,7 @@ class ChannelViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
     search_fields = ["title", "description", "owner__username"]
     ordering_fields = ["created_at", "title"]
+    ordering = ["-created_at"]
     filterset_class = ChannelFilterSet
 
     def get_queryset(self):
@@ -86,6 +89,21 @@ class ChannelViewSet(viewsets.ModelViewSet):
             .get_queryset()
             .select_related("owner")
             .prefetch_related("collaborators")
+            .annotate(
+                videos_count=Count(
+                    "videos",
+                    filter=Q(videos__status="PU")
+                    & (
+                        Q(videos__encoding_status="DO")
+                        | (
+                            ~Q(videos__video_file="")
+                            & ~Q(videos__video_file__isnull=True)
+                        )
+                    ),
+                    distinct=True,
+                ),
+                themes_count=Count("themes", distinct=True),
+            )
         )
         if not user.is_authenticated:
             return qs.filter(is_public=True)
@@ -145,9 +163,23 @@ class ThemeViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["title", "description"]
 
+    def get_serializer_class(self):
+        """Return the appropriate serializer based on the action."""
+        if self.action == "list":
+            return ThemeListSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Return themes filtered by channel, visibility, and user access rights."""
-        qs = Theme.objects.all().prefetch_related("children", "themeitem_set__video")
+        from django.db.models import Count
+
+        qs = Theme.objects.all().prefetch_related("children")
+
+        if self.action != "list":
+            qs = qs.prefetch_related("themeitem_set__video")
+        else:
+            qs = qs.annotate(videos_count=Count("themeitem"))
+
         channel_id = self.request.query_params.get("channel")
         if channel_id:
             qs = qs.filter(channel_id=channel_id)
@@ -206,15 +238,24 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     ordering_fields = ["created_at", "title"]
     filterset_class = PlaylistFilterSet
 
+    def get_serializer_class(self):
+        """Return the appropriate serializer based on the action."""
+        if self.action == "list":
+            return PlaylistListSerializer
+        return super().get_serializer_class()
+
     def get_queryset(self):
         """Return playlists filtered by user visibility (public or owned)."""
+        from django.db.models import Count
+
         user = self.request.user
-        qs = (
-            super()
-            .get_queryset()
-            .select_related("owner")
-            .prefetch_related("items__video")
-        )
+        qs = super().get_queryset().select_related("owner")
+
+        if self.action != "list":
+            qs = qs.prefetch_related("items__video")
+        else:
+            qs = qs.annotate(videos_count=Count("items"))
+
         if not user.is_authenticated:
             return qs.filter(is_public=True)
         if user.is_superuser:

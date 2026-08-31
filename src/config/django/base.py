@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.sites",
+    "django.contrib.flatpages",
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework_simplejwt",
@@ -52,6 +53,8 @@ INSTALLED_APPS = [
     "src.apps.collection",
     "src.apps.completion",
     "src.apps.dressing",
+    "src.apps.layout",
+    "src.apps.search",
     "src.apps.live",
     "src.apps.migration",
     "src.apps.import_video",
@@ -184,6 +187,8 @@ APPS_WITH_CUSTOM_SETTINGS = [
     "encoding",
     "collection",
     "completion",
+    "layout",
+    "search",
     "import_video",
 ]
 

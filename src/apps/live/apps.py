@@ -3,7 +3,6 @@ Esup-Pod - Live application configuration.
 """
 
 from django.apps import AppConfig
-from django.utils.translation import gettext_lazy as _
 
 
 class LiveConfig(AppConfig):
@@ -11,7 +10,7 @@ class LiveConfig(AppConfig):
 
     name = "src.apps.live"
     label = "live"
-    verbose_name = _("Live Streaming")
+    verbose_name = "Live Streaming"
     default_auto_field = "django.db.models.AutoField"
 
     def ready(self):

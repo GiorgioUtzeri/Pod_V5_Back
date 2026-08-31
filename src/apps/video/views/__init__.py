@@ -15,6 +15,9 @@ from .UserMarkerTimeViewSet import UserMarkerTimeViewSet  # noqa: F401
 from .VideoCutViewSet import VideoCutViewSet  # noqa: F401
 from .ViewCountViewSet import ViewCountViewSet  # noqa: F401
 
+from .ChapterViewSet import ChapterViewSet  # noqa: F401
+from .SocialNetworkViewSet import SocialNetworkViewSet  # noqa: F401
+
 __all__ = [
     "VideoViewSet",
     "SubtitleViewSet",
@@ -27,5 +30,7 @@ __all__ = [
     "DublinCoreViewSet",
     "UserMarkerTimeViewSet",
     "VideoCutViewSet",
+    "ChapterViewSet",
+    "SocialNetworkViewSet",
     "ViewCountViewSet",
 ]

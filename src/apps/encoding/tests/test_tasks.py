@@ -47,33 +47,36 @@ class EncodingTaskTestCase(TestCase):
         mock_client.execute_task.return_value = {"task_id": "123", "status": "accepted"}
         mock_get_client.return_value = mock_client
 
-        source_url = f"http://testserver/videos/{self.video.slug}.mp4"
+        from src.apps.video.conf import video_settings
 
-        response = trigger_runner_encoding_task(
-            video_id=self.video.id,
-            source_url=source_url,
-        )
+        with patch.object(video_settings, "use_hls", False):
+            source_url = f"http://testserver/videos/{self.video.slug}.mp4"
 
-        from django.conf import settings
-        from config.env import env
+            response = trigger_runner_encoding_task(
+                video_id=self.video.id,
+                source_url=source_url,
+            )
 
-        site_url = settings.SITE_URL.rstrip("/")
-        webhook_secret = env("ENCODING_WEBHOOK_SECRET", default="")
-        expected_notify_url = f"{site_url}/api/encoding/webhook/?secret={webhook_secret}&video_id={self.video.id}"
+            from django.conf import settings
+            from config.env import env
 
-        rendition_config = {
-            "360": {"resolution": "640x360", "encode_mp4": True},
-            "720": {"resolution": "1280x720", "encode_mp4": True},
-            "1080": {"resolution": "1920x1080", "encode_mp4": False},
-        }
+            site_url = settings.SITE_URL.rstrip("/")
+            webhook_secret = env("ENCODING_WEBHOOK_SECRET", default="")
+            expected_notify_url = f"{site_url}/api/encoding/webhook/?secret={webhook_secret}&video_id={self.video.id}"
 
-        mock_client.execute_task.assert_called_once_with(
-            video_id=str(self.video.slug),
-            source_url=source_url,
-            notify_url=expected_notify_url,
-            parameters={"rendition": json.dumps(rendition_config)},
-        )
-        self.assertEqual(response, {"task_id": "123", "status": "accepted"})
+            rendition_config = {
+                "360": {"resolution": "640x360", "encode_mp4": True},
+                "720": {"resolution": "1280x720", "encode_mp4": True},
+                "1080": {"resolution": "1920x1080", "encode_mp4": False},
+            }
+
+            mock_client.execute_task.assert_called_once_with(
+                video_id=str(self.video.slug),
+                source_url=source_url,
+                notify_url=expected_notify_url,
+                parameters={"rendition": json.dumps(rendition_config)},
+            )
+            self.assertEqual(response, {"task_id": "123", "status": "accepted"})
 
     @patch("src.apps.encoding.tasks.get_runner_client")
     @patch("src.apps.encoding.tasks.trigger_runner_encoding_task.retry")

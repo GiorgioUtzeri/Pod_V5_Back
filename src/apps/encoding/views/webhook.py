@@ -6,19 +6,15 @@ from the runner manager.
 """
 
 import logging
-import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.exceptions import ObjectDoesNotExist
-import contextlib
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from src.apps.video.models import Video
 from config.env import env
 from src.apps.encoding.services.runner_client import get_runner_client
-from src.apps.encoding.conf import encoding_settings
-from src.apps.encoding.models import EncodingVideo
 
 logger = logging.getLogger(__name__)
 
@@ -131,14 +127,20 @@ class EncodingWebhookView(APIView):
                     (name for name in file_list if name in fallback_candidates), None
                 )
 
-            self._process_video_files(video, client, task_id, file_list, thumbnail_path)
+            # Trigger async download instead of blocking the webhook thread
+            from src.apps.encoding.tasks import download_runner_files_task
 
-            # Mark encoding as done.
-            video.encoding_status = Video.EncodingStatus.DONE
-            video.save()
+            download_runner_files_task.delay(
+                video_id=video.pk,
+                task_id=task_id,
+                file_list=file_list,
+                thumbnail_path=thumbnail_path,
+            )
 
-            logger.info("Video pk=%s encoded successfully.", video.pk)
-            return Response({"status": "published"})
+            # Do not mark as DONE here, the Celery task will do it when finished.
+            # We return early.
+            logger.info("Async download task dispatched for video pk=%s.", video.pk)
+            return Response({"status": "published_async"})
 
         except Exception as e:
             logger.error(
@@ -162,45 +164,4 @@ class EncodingWebhookView(APIView):
         logger.error("Encoding failed for video pk=%s: %s", video.pk, error_msg)
         return Response({"status": "error_recorded"})
 
-    def _process_video_files(
-        self, video: Video, client, task_id: str, file_list: list, thumbnail_path: str
-    ):
-        """Process files from the runner: keep/delete source, insert encoded formats, and update thumbnail."""
-        if not encoding_settings.keep_source_file and video.video_file:
-            video.video_file.delete(save=False)
-            video.video_file = None
-
-        for file_name in file_list:
-            if file_name.endswith(".mp4"):
-                res = (
-                    file_name.split("_")[0]
-                    if "_" in file_name
-                    else file_name.split(".")[0]
-                )
-                # NOTE: Normalise resolution to always end with "p" (e.g. "360" → "360p").
-                # This ensures EncodingVideo.resolution is stored as "360p", which is
-                # the format expected by VideoViewSet._get_video_file_to_stream() after
-                # the V4-compatibility normalisation applied in the stream action.
-                if not res.endswith("p"):
-                    res = f"{res}p"
-                encoded_video_file = client.download_task_file_to_temp(task_id, file_name)
-
-                encoding_obj, created = EncodingVideo.objects.get_or_create(
-                    video=video, resolution=res
-                )
-                if not created and encoding_obj.file:
-                    encoding_obj.file.delete(save=False)
-
-                encoding_obj.file.save(
-                    encoded_video_file.name, encoded_video_file, save=True
-                )
-                with contextlib.suppress(FileNotFoundError):
-                    os.unlink(encoded_video_file.file.name)
-
-        if thumbnail_path:
-            if video.overview:
-                video.overview.delete(save=False)
-            new_overview = client.download_task_file_to_temp(task_id, thumbnail_path)
-            video.overview.save(new_overview.name, new_overview, save=False)
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(new_overview.file.name)
+    # Process video files moved to celery task `download_runner_files_task` in `tasks.py`

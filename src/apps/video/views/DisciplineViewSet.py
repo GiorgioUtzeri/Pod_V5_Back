@@ -41,6 +41,6 @@ class DisciplineViewSet(viewsets.ModelViewSet):
     API view set for the Discipline model.
     """
 
-    queryset = Discipline.objects.all()
+    queryset = Discipline.objects.all().order_by("title")
     serializer_class = DisciplineSerializer
     permission_classes = [IsStaffOrReadOnly]

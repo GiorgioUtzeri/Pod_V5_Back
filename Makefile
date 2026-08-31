@@ -36,7 +36,8 @@ help: ## List available make commands
 
 start: check-django-env ## Start the project/service (detached, build if needed). Usage: make start [service]
 	$(call info,Starting Docker environment (service(s): $(if $(SERVICE_ARGS),$(SERVICE_ARGS),all))...)
-	@mkdir -p media && chmod 775 media
+	@if [ ! -e media ]; then mkdir -p media; fi
+	@if [ -w media ]; then chmod 775 media; else echo "Info: 'media' directory is read-only or not writable, skipping chmod."; fi
 	$(DOCKER_COMPOSE_CMD) up --build -d $(SERVICE_ARGS)
 	$(call info,Server running in background — use 'make logs' to follow output.)
 
@@ -120,7 +121,7 @@ test-cov: start ## Run tests with coverage report
 
 test-api-curl: start ## Run curl-based API tests inside the container
 	$(call info,Running curl-based API tests...)
-	@$(DOCKER_COMPOSE_CMD) exec -T $(DOCKER_SERVICE_NAME) bash /app/scripts/test_api_curl.sh
+	@$(DOCKER_COMPOSE_CMD) exec -T $(DOCKER_SERVICE_NAME) bash -c "for script in /app/scripts/test_*.sh; do if [ \"\$$script\" != \"/app/scripts/test_base.sh\" ]; then echo \"Running \$$script...\"; bash \"\$$script\" || exit 1; fi; done"
 
 check-django-env: ## Environment checks (DJANGO_SETTINGS_MODULE must end with .docker)
 	$(call info,Checking DJANGO_SETTINGS_MODULE...)
@@ -134,3 +135,24 @@ check-django-env: ## Environment checks (DJANGO_SETTINGS_MODULE must end with .d
 		exit 1; \
 	fi
 	$(call info,Environment OK.)
+
+sync-remote: ## Sync local changes to remote test server
+	@if [ -z "$(SYNC_REMOTE_DEST)" ]; then \
+		echo "ERROR: SYNC_REMOTE_DEST is not set. Please define it in your .env file."; \
+		echo "Example: SYNC_REMOTE_DEST=bsere@pod3-test:/usr/local/django_projects/podv5/"; \
+		exit 1; \
+	fi
+	$(call info,Syncing to $(SYNC_REMOTE_DEST) with sudo privileges...)
+	@rsync -avz --delete \
+		--rsync-path="sudo rsync" \
+		--exclude=".git" \
+		--exclude=".venv" \
+		--exclude="node_modules" \
+		--exclude="media" \
+		--exclude="staticfiles" \
+		--exclude="__pycache__" \
+		--exclude="htmlcov" \
+		--exclude=".pytest_cache" \
+		--exclude=".vscode" \
+		./ $(SYNC_REMOTE_DEST)
+	$(call info,Sync completed.)

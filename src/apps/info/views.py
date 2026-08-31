@@ -11,6 +11,9 @@ from pydantic_settings import BaseSettings
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import viewsets
+from django.contrib.flatpages.models import FlatPage
+from .serializers import FlatPageSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -128,3 +131,16 @@ class ConfigInfoView(APIView):
                     configurations[module_name] = public_config
 
         return Response(configurations)
+
+
+class FlatPageViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Retrieves flatpages (static pages like terms, about, etc.)
+    managed by Django admin.
+    """
+
+    queryset = FlatPage.objects.all()
+    serializer_class = FlatPageSerializer
+    permission_classes = [AllowAny]
+    lookup_field = "url"
+    lookup_value_regex = ".*"  # Allow slashes in URL

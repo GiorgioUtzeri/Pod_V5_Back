@@ -16,6 +16,8 @@ from src.apps.video.views import (
     DublinCoreViewSet,
     UserMarkerTimeViewSet,
     VideoCutViewSet,
+    ChapterViewSet,
+    SocialNetworkViewSet,
     ViewCountViewSet,
 )
 from src.apps.video.conf import video_settings
@@ -26,6 +28,8 @@ router.register(r"subtitles", SubtitleViewSet, basename="subtitle")
 router.register(r"disciplines", DisciplineViewSet, basename="discipline")
 router.register(r"tags", TagViewSet, basename="tag")
 router.register(r"types", TypeViewSet, basename="type")
+router.register(r"chapters", ChapterViewSet, basename="chapter")
+router.register(r"social-networks", SocialNetworkViewSet, basename="social-network")
 
 
 if video_settings.use_hyperlinks:

@@ -41,6 +41,6 @@ class TypeViewSet(viewsets.ModelViewSet):
     API view set for the Type model.
     """
 
-    queryset = Type.objects.all()
+    queryset = Type.objects.all().order_by("title")
     serializer_class = TypeSerializer
     permission_classes = [IsStaffOrReadOnly]

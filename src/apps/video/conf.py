@@ -101,6 +101,11 @@ class VideoConfig(BaseSettings):
         description=_("Enable video commenting system."),
         json_schema_extra={"public": True},
     )
+    show_views: bool = Field(
+        default=defaults.SHOW_VIEWS,
+        description=_("Enable the display of view counts for videos."),
+        json_schema_extra={"public": True},
+    )
     use_bulk_actions: bool = Field(
         default=defaults.USE_BULK_ACTIONS,
         description=_("Enable bulk update/delete on videos."),
@@ -111,6 +116,16 @@ class VideoConfig(BaseSettings):
         description=_(
             "Number of videos above which bulk operations are processed asynchronously via Celery."
         ),
+    )
+    use_x_accel_redirect: bool = Field(
+        default=defaults.USE_X_ACCEL_REDIRECT,
+        description=_("Enable X-Accel-Redirect for production streaming."),
+        json_schema_extra={"public": True},
+    )
+    use_hls: bool = Field(
+        default=defaults.USE_HLS,
+        description=_("Enable HLS encoding and streaming."),
+        json_schema_extra={"public": True},
     )
 
     # --- Licensing ---

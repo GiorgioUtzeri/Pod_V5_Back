@@ -22,6 +22,8 @@ class ChannelSerializer(serializers.ModelSerializer):
     """Serializer for the Channel model."""
 
     owner_username = serializers.ReadOnlyField(source="owner.username")
+    videos_count = serializers.IntegerField(read_only=True, default=0)
+    themes_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         """ChannelSerializer metadata."""
@@ -42,6 +44,8 @@ class ChannelSerializer(serializers.ModelSerializer):
             "old_v4_id",
             "created_at",
             "updated_at",
+            "videos_count",
+            "themes_count",
         ]
         read_only_fields = ["slug", "owner", "created_at", "updated_at"]
         extra_kwargs = {
@@ -217,3 +221,77 @@ class FavoriteSerializer(serializers.ModelSerializer):
         model = Favorite
         fields = ["id", "user", "user_username", "video", "video_details", "added_at"]
         read_only_fields = ["user", "added_at"]
+
+
+class ThemeListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing Theme models without items."""
+
+    children = serializers.SerializerMethodField()
+    videos_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        """ThemeListSerializer metadata."""
+
+        model = Theme
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "description",
+            "parent",
+            "channel",
+            "banner",
+            "default_order",
+            "old_v4_id",
+            "created_at",
+            "updated_at",
+            "children",
+            "videos_count",
+        ]
+        read_only_fields = ["slug", "created_at", "updated_at", "videos_count"]
+
+    @extend_schema_field(serializers.ListSerializer(child=serializers.DictField()))
+    def get_children(self, obj):
+        """Recursively serialize children themes without items."""
+        children = obj.children.all()
+        if children:
+            return ThemeListSerializer(children, many=True, context=self.context).data
+        return []
+
+
+class PlaylistListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for listing Playlist models without items."""
+
+    owner_username = serializers.ReadOnlyField(source="owner.username")
+    is_protected = serializers.SerializerMethodField()
+    videos_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        """PlaylistListSerializer metadata."""
+
+        model = Playlist
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "description",
+            "owner",
+            "owner_username",
+            "is_public",
+            "password",
+            "is_protected",
+            "default_order",
+            "old_v4_id",
+            "created_at",
+            "updated_at",
+            "videos_count",
+        ]
+        read_only_fields = ["slug", "owner", "created_at", "updated_at", "videos_count"]
+        extra_kwargs = {
+            "password": {"write_only": True},
+        }
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_protected(self, obj):
+        """Return True if the playlist has a password set."""
+        return bool(obj.password)

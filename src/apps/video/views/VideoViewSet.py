@@ -1,6 +1,4 @@
-"""
-Esup-Pod - Video viewset.
-"""
+"""Esup-Pod - Video viewset."""
 
 import os
 import hashlib
@@ -12,7 +10,7 @@ from django.db.models import Q, F, Sum
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from django.utils.translation import gettext_lazy as _
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 
 from rest_framework import viewsets, permissions, parsers, filters, status
 from rest_framework.decorators import action
@@ -21,6 +19,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError, NotFoun
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.hashers import check_password
+
 from drf_spectacular.utils import (
     extend_schema,
     extend_schema_view,
@@ -46,7 +45,12 @@ logger = logging.getLogger(__name__)
 @extend_schema_view(
     list=extend_schema(
         summary="List videos",
-        description="Retrieve a list of videos. This endpoint supports advanced multi-value filtering. You can pass multiple values for the same parameter (e.g., `?tags__name=python&tags__name=django` or `?discipline=1&discipline=2`). Supported multi-value fields: `tags__name`, `tags__slug`, `type__slug`, `cursus__slug`, `discipline`, `status`, and `owner__username`.",
+        description=(
+            "Retrieve a list of videos. This endpoint supports advanced multi-value filtering. "
+            "You can pass multiple values for the same parameter (e.g., `?tags__name=python&tags__name=django` "
+            "or `?discipline=1&discipline=2`). Supported multi-value fields: `tags__name`, `tags__slug`, "
+            "`type__slug`, `cursus__slug`, `discipline`, `status`, and `owner__username`."
+        ),
     )
 )
 class VideoViewSet(viewsets.ModelViewSet):
@@ -119,7 +123,12 @@ class VideoViewSet(viewsets.ModelViewSet):
 
         qs = Video.objects.filter(sites=current_site)
 
-        if getattr(self, "action", None) in ["stream", "unlock", "register_view"]:
+        if getattr(self, "action", None) in [
+            "stream",
+            "unlock",
+            "register_view",
+            "create_stream_token",
+        ]:
             return qs
 
         return (
@@ -200,10 +209,23 @@ class VideoViewSet(viewsets.ModelViewSet):
         if video.video_file:
             from src.apps.encoding.tasks import trigger_runner_encoding_task
 
-            source_url = self.request.build_absolute_uri(video.video_file.url)
-
+            site_url = encoding_settings.site_url.rstrip("/")
+            source_url = f"{site_url}{video.video_file.url}"
             logger.debug("source_url: %s", source_url)
+            trigger_runner_encoding_task.delay(video.pk, source_url)
 
+    def perform_update(self, serializer):
+        """Updates an existing video, triggering re-encoding if the video file changed."""
+        previous_file = self.get_object().video_file
+        video = serializer.save()
+        if video.video_file and (not previous_file or previous_file != video.video_file):
+            from src.apps.encoding.tasks import trigger_runner_encoding_task
+
+            video.encoding_status = Video.EncodingStatus.PENDING
+            video.save(update_fields=["encoding_status"])
+            site_url = encoding_settings.site_url.rstrip("/")
+            source_url = f"{site_url}{video.video_file.url}"
+            logger.debug("Re-encoding source_url: %s", source_url)
             trigger_runner_encoding_task.delay(video.pk, source_url)
 
     def _is_owner_or_admin(self, user, video):
@@ -233,6 +255,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         """Checks if the user can access a restricted video."""
         if video.is_auth_required and not request.user.is_authenticated:
             raise PermissionDenied(_("Authentication required to play this video."))
+
         if not video.password:
             return
 
@@ -266,12 +289,61 @@ class VideoViewSet(viewsets.ModelViewSet):
         """Helper to find the appropriate video file for streaming."""
         if resolution:
             encoding = video.encodings.filter(resolution=resolution).first()
-            if encoding and encoding.file:
-                return encoding.file
-        first_encoding = video.encodings.first()
-        if first_encoding and first_encoding.file:
-            return first_encoding.file
-        return video.video_file
+            if encoding and encoding.file and encoding.file.name:
+                if os.path.exists(encoding.file.path):
+                    return encoding.file
+
+        # Check all encodings and return the first one that actually exists on disk
+        for encoding in video.encodings.all():
+            if encoding.file and encoding.file.name:
+                if os.path.exists(encoding.file.path):
+                    return encoding.file
+
+        # Fallback to the original video file
+        if video.video_file and video.video_file.name:
+            return video.video_file
+        return None
+
+    @extend_schema(
+        summary="Create an ephemeral stream token",
+        description=(
+            "Generates an ephemeral token (valid for 5 minutes) to play the video. "
+            "The frontend calls this endpoint just before loading the video player. "
+            "This allows the player to access the video stream via a simple URL, "
+            "without needing to expose the user's main JWT or use cookies."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="Token created successfully.",
+                response={
+                    "type": "object",
+                    "properties": {"stream_token": {"type": "string"}},
+                },
+            ),
+        },
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[permissions.AllowAny],
+        url_path="create-stream-token",
+    )
+    def create_stream_token(self, request, slug=None):
+        """
+        Generates an ephemeral token (valid for 5 minutes) to securely access the stream endpoint.
+        This allows the video player to fetch the video stream using a short-lived token in the URL,
+        avoiding the need to pass the user's main JWT token or rely on session cookies.
+        """
+        video = self.get_object()
+        self._check_stream_permissions(request, video)
+
+        import uuid
+        from django.core.cache import cache
+
+        token = str(uuid.uuid4())
+        cache.set(f"stream_token_{token}", video.id, timeout=300)
+
+        return Response({"stream_token": token})
 
     @extend_schema(
         summary="Stream video file",
@@ -282,7 +354,14 @@ class VideoViewSet(viewsets.ModelViewSet):
                 location=OpenApiParameter.QUERY,
                 required=False,
                 description="Target resolution for streaming (e.g., '1080', '720p', '360'). If specified without 'p', the backend automatically appends it.",
-            )
+            ),
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Ephemeral stream token obtained from /create-stream-token/.",
+            ),
         ],
         responses={
             200: OpenApiResponse(
@@ -291,21 +370,32 @@ class VideoViewSet(viewsets.ModelViewSet):
             404: OpenApiResponse(
                 description="Video file or specified resolution not found on disk."
             ),
+            403: OpenApiResponse(description="Invalid or missing stream token."),
         },
     )
     @action(detail=True, methods=["get"], permission_classes=[permissions.AllowAny])
-    def stream(self, request, slug=None):
+    def stream(self, request, slug=None):  # noqa: C901
         """
         Serves the video file as a progressive stream. Supports optional resolution filtering (e.g., 360p, 720p, 1080p).
         Falls back to the best available resolution if the requested one is not found.
         """
         video = self.get_object()
 
-        self._check_stream_permissions(request, video)
+        from django.core.cache import cache
+
+        token = request.query_params.get("token")
+
+        if not token:
+            raise PermissionDenied(_("Missing stream token."))
+
+        cached_video_id = cache.get(f"stream_token_{token}")
+        if not cached_video_id or cached_video_id != video.id:
+            raise PermissionDenied(_("Invalid or expired stream token."))
 
         resolution = request.query_params.get("resolution")
-        if resolution and not resolution.endswith("p"):
+        if resolution and resolution != "hls" and not resolution.endswith("p"):
             resolution = f"{resolution}p"
+
         video_file_to_stream = self._get_video_file_to_stream(video, resolution)
 
         if not video_file_to_stream:
@@ -315,10 +405,160 @@ class VideoViewSet(viewsets.ModelViewSet):
         if not os.path.exists(path):
             raise Http404(_("Video file not found on disk"))
 
+        # If the file is HLS, redirect to the HLS endpoint so relative TS chunks resolve correctly
+        if path.endswith(".m3u8"):
+            basename = os.path.basename(path)
+            from django.urls import reverse
+            from django.http import HttpResponseRedirect
+
+            url = reverse("video-hls", kwargs={"slug": video.slug, "filename": basename})
+            return HttpResponseRedirect(f"{url}?token={token}")
+
+        if video_settings.use_x_accel_redirect:
+            # PROD: Nginx X-Accel-Redirect (resolves Range issues instantly via sendfile)
+            # video_file_to_stream.name is the relative path (e.g. 'video/source/...')
+            # We prefix it with the internal location defined in Nginx (e.g., '/protected_media/')
+            relative_path = video_file_to_stream.name
+            # Ensure it doesn't have a leading slash so it joins properly
+            if relative_path.startswith("/"):
+                relative_path = relative_path[1:]
+
+            response = HttpResponse()
+            response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
+
+            if relative_path.endswith(".m3u8"):
+                response["Content-Type"] = "application/vnd.apple.mpegurl"
+            else:
+                response["Content-Type"] = "video/mp4"
+            return response
+
+        # DEV Fallback
+        return self._serve_file_with_range(request, path)
+
+    def _serve_file_with_range(self, request, path):  # noqa: C901
+        """Helper to serve files with HTTP Range support for local development without Nginx."""
+        import os
+        import re
+        from django.http import StreamingHttpResponse
+
+        size = os.path.getsize(path)
+        content_type = (
+            "application/vnd.apple.mpegurl"
+            if path.endswith(".m3u8")
+            else (
+                "video/mp2t"
+                if path.endswith(".ts") or path.endswith(".m4s")
+                else "video/mp4"
+            )
+        )
+
+        range_header = request.META.get("HTTP_RANGE", "").strip()
+        if range_header.startswith("bytes="):
+            range_match = re.match(r"bytes=(\d*)-(\d*)", range_header)
+            if range_match:
+                start_str = range_match.group(1)
+                end_str = range_match.group(2)
+
+                if start_str == "" and end_str != "":
+                    # bytes=-500 -> last 500 bytes
+                    start = max(0, size - int(end_str))
+                    end = size - 1
+                elif start_str != "":
+                    start = int(start_str)
+                    end = int(end_str) if end_str else size - 1
+                else:
+                    start = 0
+                    end = size - 1
+
+                if end >= size:
+                    end = size - 1
+
+                if start > end or start >= size:
+                    from django.http import HttpResponse
+
+                    resp = HttpResponse(status=416)
+                    resp["Content-Range"] = f"bytes */{size}"
+                    return resp
+
+                length = end - start + 1
+
+                def file_iterator(file_path, start, length, chunk_size=8192):
+                    """Yield chunks of a file starting from a specific offset up to a certain length."""
+                    with open(file_path, "rb") as f:
+                        f.seek(start)
+                        remaining = length
+                        while remaining > 0:
+                            chunk = f.read(min(chunk_size, remaining))
+                            if not chunk:
+                                break
+                            yield chunk
+                            remaining -= len(chunk)
+
+                response = StreamingHttpResponse(
+                    file_iterator(path, start, length),
+                    status=206,
+                    content_type=content_type,
+                )
+                response["Content-Range"] = f"bytes {start}-{end}/{size}"
+                response["Accept-Ranges"] = "bytes"
+                response["Content-Length"] = str(length)
+                return response
+
         file = open(path, "rb")
-        response = FileResponse(file)
-        response["Content-Type"] = "video/mp4"
+        response = FileResponse(file, content_type=content_type)
+        response["Accept-Ranges"] = "bytes"
+        response["Content-Length"] = str(size)
         return response
+
+    @extend_schema(
+        summary="Serve HLS playlist and chunks",
+        responses={200: OpenApiResponse(description="HLS chunk or playlist.")},
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        permission_classes=[permissions.AllowAny],
+        url_path=r"hls/(?P<filename>.+)",
+    )
+    def hls(self, request, slug=None, filename=None):
+        """
+        Serves the HLS playlist (.m3u8) or chunk (.ts).
+        Requires the same ephemeral stream token as the MP4 stream.
+        """
+        video = self.get_object()
+        from django.core.cache import cache
+
+        token = request.query_params.get("token")
+        if not token:
+            raise PermissionDenied(_("Missing stream token."))
+
+        cached_video_id = cache.get(f"stream_token_{token}")
+        if not cached_video_id or cached_video_id != video.id:
+            raise PermissionDenied(_("Invalid or expired stream token."))
+
+        # HLS files are stored in MEDIA_ROOT/video/hls/{video_id}/
+        import os
+        from django.conf import settings
+
+        hls_dir = os.path.join(settings.MEDIA_ROOT, "video", "hls", str(video.id))
+        path = os.path.join(hls_dir, filename)
+
+        if not os.path.exists(path):
+            raise Http404(_("HLS file not found on disk"))
+
+        if video_settings.use_x_accel_redirect:
+            relative_path = f"video/hls/{video.id}/{filename}"
+            response = HttpResponse()
+            response["X-Accel-Redirect"] = f"/protected_media/{relative_path}"
+
+            if filename.endswith(".m3u8"):
+                response["Content-Type"] = "application/vnd.apple.mpegurl"
+            else:
+                response["Content-Type"] = "video/mp2t"
+            return response
+
+        # DEV Fallback
+        return self._serve_file_with_range(request, path)
 
     @extend_schema(
         summary="Register a video view",
@@ -345,9 +585,12 @@ class VideoViewSet(viewsets.ModelViewSet):
         video.save(update_fields=["view_count"])
         video.refresh_from_db()
 
+        from datetime import date
+
         view_count_obj, created = video.view_counts.get_or_create(date=date.today())
         view_count_obj.count = F("count") + 1
         view_count_obj.save(update_fields=["count"])
+
         return Response({"status": "viewed", "total_count": video.view_count})
 
     @extend_schema(
@@ -423,6 +666,7 @@ class VideoViewSet(viewsets.ModelViewSet):
         if video.status == Video.Status.RESTRICTED and video.is_auth_required:
             if not request.user.is_authenticated:
                 raise PermissionDenied(_("You must be logged in to access this video."))
+
         v4_hash = request.query_params.get("hash") or request.data.get("hash")
         if v4_hash:
             legacy_hash = hashlib.sha1(
@@ -446,6 +690,7 @@ class VideoViewSet(viewsets.ModelViewSet):
                 else None
             )
             return Response({"video_url": url})
+
         return Response({"error": _("Incorrect password or hash")}, status=403)
 
     @extend_schema(
@@ -480,11 +725,20 @@ class VideoViewSet(viewsets.ModelViewSet):
     def metadata(self, request):
         """
         Returns available choices for License, Cursus, and Status to help the frontend.
-        """
-        from src.apps.video.models import License, Cursus, Language
+        V4 equivalent: context_video_data() — types, disciplines, cursus, licenses.
 
-        return Response(
-            {
+        Cached in Redis (TTL=600s) as this data is nearly static.
+        Same pattern as V4: cache.get("TYPES") / cache.set("TYPES", ..., timeout=600).
+        """
+        from django.core.cache import cache
+
+        CACHE_KEY = "pod:video:metadata"
+        data = cache.get(CACHE_KEY)
+
+        if data is None:
+            from src.apps.video.models import License, Cursus, Language
+
+            data = {
                 "licenses": [
                     {"value": lic.slug, "label": lic.name}
                     for lic in License.objects.all()
@@ -500,7 +754,12 @@ class VideoViewSet(viewsets.ModelViewSet):
                     for lang in Language.objects.all()
                 ],
             }
-        )
+            cache.set(CACHE_KEY, data, timeout=600)
+            logger.debug("Cache SET video:metadata (TTL=600s)")
+        else:
+            logger.debug("Cache HIT video:metadata")
+
+        return Response(data)
 
     @extend_schema(
         summary="Transfer video ownership",

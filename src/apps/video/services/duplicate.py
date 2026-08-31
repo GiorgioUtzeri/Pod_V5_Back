@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 from src.apps.video.models import Video
 from src.apps.video.services.sites import assign_default_site
 
-from .files import duplicate_source_file
 from .slug import generate_unique_slug
 
 
@@ -55,19 +54,13 @@ def duplicate_video(original: Video, user, request=None):
     else:
         raise ValueError(_("Video must have at least one site"))
 
-    if original.video_file:
-        duplicated.video_file.name = duplicate_source_file(
-            duplicated.id,
-            original.video_file.path,
-            original.video_file.name,
-        )
-        duplicated.save(update_fields=["video_file"])
+    # Note: As per requirements, duplicated videos do NOT have a source file by default (Fiche vide).
+    # The source file can be added later by the user from the edition page.
 
     duplicated.disciplines.set(original.disciplines.all())
     duplicated.restricted_groups.set(original.restricted_groups.all())
     duplicated.co_owners.set(original.co_owners.all())
 
-    # themes are added via ThemeVideo explicitly or M2M set
     if hasattr(original, "themes") and original.themes.exists():
         duplicated.themes.set(original.themes.all())
 
@@ -95,13 +88,5 @@ def duplicate_video(original: Video, user, request=None):
             time_start=hyperlink.time_start,
             time_end=hyperlink.time_end,
         )
-
-    if duplicated.video_file:
-        from src.apps.encoding.tasks import trigger_runner_encoding_task
-        from src.apps.video.conf import video_settings
-
-        site_url = video_settings.site_url.rstrip("/")
-        source_url = f"{site_url}{duplicated.video_file.url}"
-        trigger_runner_encoding_task.delay(duplicated.pk, source_url)
 
     return duplicated

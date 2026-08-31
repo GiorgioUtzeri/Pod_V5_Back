@@ -43,12 +43,16 @@ class EncodingWebhookViewTests(APITestCase):
 
     @patch("src.apps.encoding.views.webhook.env")
     @patch("src.apps.encoding.views.webhook.get_runner_client")
-    def test_webhook_success(self, mock_get_client, mock_env):
+    @patch("src.apps.encoding.tasks.get_runner_client")
+    def test_webhook_success(
+        self, mock_tasks_get_client, mock_webhook_get_client, mock_env
+    ):
         """Verifies successful processing of a 'completed' status webhook."""
         mock_env.return_value = "mysecret"
 
         mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
+        mock_webhook_get_client.return_value = mock_client
+        mock_tasks_get_client.return_value = mock_client
         mock_client.get_task_manifest.return_value = {
             "task_id": "test-task-123",
             "files": ["720p_video.mp4", "test_0.png", "task_metadata.json"],

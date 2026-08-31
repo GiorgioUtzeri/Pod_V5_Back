@@ -26,9 +26,14 @@ class VideoManager(models.Manager):
         if user.is_authenticated and user.is_superuser:
             return self.get_queryset()
 
+        now = timezone.now()
+        pub_date_filter = Q(publication_date__isnull=True) | Q(publication_date__lte=now)
+
         if not user.is_authenticated:
-            q_filter = Q(status=self.model.Status.PUBLISHED) | (
-                Q(status=self.model.Status.RESTRICTED) & Q(is_auth_required=False)
+            q_filter = (Q(status=self.model.Status.PUBLISHED) & pub_date_filter) | (
+                Q(status=self.model.Status.RESTRICTED)
+                & Q(is_auth_required=False)
+                & pub_date_filter
             )
             if not video_settings.homepage_shows_passworded:
                 q_filter &= Q(password__isnull=True) | Q(password__exact="")
@@ -36,8 +41,8 @@ class VideoManager(models.Manager):
 
         # Authenticated users
         base_q = (
-            Q(status=self.model.Status.PUBLISHED)
-            | Q(status=self.model.Status.RESTRICTED)
+            (Q(status=self.model.Status.PUBLISHED) & pub_date_filter)
+            | (Q(status=self.model.Status.RESTRICTED) & pub_date_filter)
             | Q(owner=user)
             | Q(co_owners=user)
             | Q(channel__owner=user)
@@ -285,9 +290,34 @@ class Video(models.Model):
         blank=True, help_text=_("A comma-separated list of tags.")
     )
 
+    dressing = models.ForeignKey(
+        "dressing.Dressing",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_videos",
+        verbose_name=_("Video Dressing"),
+        help_text=_("Associated habillage / overlay config for this video."),
+    )
+
+    social_networks = models.ManyToManyField(
+        "video.SocialNetwork",
+        blank=True,
+        related_name="videos",
+        verbose_name=_("Social Networks"),
+        help_text=_("Social networks enabled for sharing this video."),
+    )
+
     # 7. TIMESTAMPS
     created_at = models.DateTimeField(_("Created At"), default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+    publication_date = models.DateTimeField(
+        _("Publication Date"),
+        null=True,
+        blank=True,
+        help_text=_("Scheduled publication date for the video."),
+    )
 
     date_to_delete = models.DateField(
         _("Expiration Date"),
@@ -314,23 +344,14 @@ class Video(models.Model):
         if self.thumbnail and hasattr(self.thumbnail, "url"):
             return self.thumbnail.url
 
-        if self.overview and hasattr(self.overview, "url"):
-            url = self.overview.url
-            if url.endswith(".vtt"):
-                from pathlib import Path
+        if self.overview:
+            from src.apps.utils.files import resolve_file_field_image_url
 
-                # We check which image format actually exists alongside the .vtt file
-                base_url = Path(url)
-                base_name = Path(self.overview.name)
-                storage = self.overview.storage
-
-                for ext in [".png", ".jpg", ".jpeg", ".webp"]:
-                    if storage.exists(str(base_name.with_suffix(ext))):
-                        return str(base_url.with_suffix(ext))
-
-                # Fallback to .png if nothing was found
-                return str(base_url.with_suffix(".png"))
-            return url
+            overview_url = resolve_file_field_image_url(self.overview)
+            if overview_url:
+                if overview_url.endswith(".vtt"):
+                    return overview_url.replace(".vtt", ".png")
+                return overview_url
 
         from django.templatetags.static import static
 

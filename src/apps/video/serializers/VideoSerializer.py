@@ -20,6 +20,11 @@ from src.apps.completion.serializers import (
 )
 from .DisciplineSerializer import DisciplineSerializer
 from .HyperlinkSerializer import VideoHyperlinkSerializer
+from .ChapterSerializer import ChapterSerializer
+from .SocialNetworkSerializer import SocialNetworkSerializer
+from src.apps.dressing.serializers import DressingSerializer
+from src.apps.dressing.models import Dressing
+from src.apps.video.models import SocialNetwork
 
 User = get_user_model()
 
@@ -71,6 +76,7 @@ class VideoSerializer(serializers.ModelSerializer):
     encoding_status_label = serializers.CharField(
         source="get_encoding_status_display", read_only=True
     )
+    has_video_file = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
     password = serializers.CharField(
         write_only=True, required=False, allow_blank=True, allow_null=True
@@ -91,6 +97,7 @@ class VideoSerializer(serializers.ModelSerializer):
         queryset=Channel.objects.all(), slug_field="slug", required=False, allow_null=True
     )
     date_of_event = serializers.DateField(required=False, allow_null=True)
+    publication_date = serializers.DateTimeField(required=False, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
     date_to_delete = serializers.DateField(required=False, allow_null=True)
@@ -116,11 +123,29 @@ class VideoSerializer(serializers.ModelSerializer):
     discipline_details = DisciplineSerializer(
         source="disciplines", many=True, read_only=True
     )
+    views = serializers.SerializerMethodField(
+        help_text=_("The number of views of the video (if enabled in config).")
+    )
 
     hyperlinks = VideoHyperlinkSerializer(many=True, read_only=True)
     contributions = ContributionSerializer(many=True, read_only=True)
     overlays = OverlaySerializer(many=True, read_only=True)
     documents = DocumentSerializer(many=True, read_only=True)
+    chapters = ChapterSerializer(many=True, read_only=True)
+
+    dressing = serializers.PrimaryKeyRelatedField(
+        queryset=Dressing.objects.all(), required=False, allow_null=True
+    )
+    dressing_details = DressingSerializer(source="dressing", read_only=True)
+
+    social_networks = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=SocialNetwork.objects.all(), required=False
+    )
+    social_network_details = SocialNetworkSerializer(
+        source="social_networks", many=True, read_only=True
+    )
+
+    download_options = serializers.SerializerMethodField()
 
     class Meta:
         """Video serializer metadata."""
@@ -146,6 +171,7 @@ class VideoSerializer(serializers.ModelSerializer):
             "status_label",
             "encoding_status",
             "encoding_status_label",
+            "has_video_file",
             "is_auth_required",
             "password",
             "thumbnail_url",
@@ -155,6 +181,7 @@ class VideoSerializer(serializers.ModelSerializer):
             "allow_downloading",
             "disable_comment",
             "date_of_event",
+            "publication_date",
             "license",
             "cursus",
             "language",
@@ -170,9 +197,16 @@ class VideoSerializer(serializers.ModelSerializer):
             "discipline_details",
             "tags",
             "hyperlinks",
+            "views",
             "contributions",
             "overlays",
             "documents",
+            "chapters",
+            "dressing",
+            "dressing_details",
+            "social_networks",
+            "social_network_details",
+            "download_options",
         ]
         extra_kwargs = {
             "video_file": {"write_only": True},
@@ -189,9 +223,55 @@ class VideoSerializer(serializers.ModelSerializer):
             "status_label",
             "encoding_status",
             "encoding_status_label",
+            "has_video_file",
             "subtitles",
             "encodings",
+            "views",
+            "chapters",
+            "download_options",
         ]
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_download_options(self, obj):
+        """Returns downloadable quality files if downloading is allowed."""
+        request = self.context.get("request")
+        user = request.user if request else None
+        is_privileged = (
+            user
+            and user.is_authenticated
+            and (
+                user.is_superuser
+                or obj.owner == user
+                or obj.co_owners.filter(pk=user.pk).exists()
+            )
+        )
+        if not is_privileged and not obj.allow_downloading:
+            return []
+
+        options = []
+        if obj.video_file:
+            options.append(
+                {
+                    "label": _("Original Quality"),
+                    "resolution": "Original",
+                    "url": self._get_absolute_url(obj.video_file, request),
+                }
+            )
+        for enc in obj.encodings.all():
+            if enc.file:
+                options.append(
+                    {
+                        "label": enc.resolution,
+                        "resolution": enc.resolution,
+                        "url": self._get_absolute_url(enc.file, request),
+                    }
+                )
+        return options
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_has_video_file(self, obj):
+        """Returns True if the video has a source file, False otherwise."""
+        return bool(obj.video_file and obj.video_file.name)
 
     @extend_schema_field(serializers.BooleanField())
     def get_has_password(self, obj):
@@ -211,6 +291,13 @@ class VideoSerializer(serializers.ModelSerializer):
         if url and request and not url.startswith("http"):
             return request.build_absolute_uri(url)
         return url
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_views(self, obj):
+        """Returns the view count if show_views is enabled."""
+        if video_settings.show_views:
+            return obj.view_count
+        return None
 
     def validate_password(self, value):
         """Hashes the password if it is provided."""
@@ -269,7 +356,9 @@ class VideoSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        Global validation to handle WEBTV_MODE.
+        Global validation for Video creation/update.
+        A video file is not required upon creation (Fiche vide).
+        However, a published video must have a source file.
         """
         attrs = super().validate(attrs)
         has_video_file_in_req = "video_file" in attrs and attrs["video_file"] is not None
@@ -281,18 +370,10 @@ class VideoSerializer(serializers.ModelSerializer):
         final_status = attrs.get(
             "status", self.instance.status if self.instance else None
         )
-        if not video_settings.webtv_mode:
-            if not has_file_after_update:
+        if final_status == Video.Status.PUBLISHED and not has_file_after_update:
+            if not video_settings.webtv_mode:
                 raise serializers.ValidationError(
-                    {
-                        "video_file": "A video file is required because WEBTV mode is disabled."
-                    }
-                )
-            if final_status == Video.Status.PUBLISHED and not has_file_after_update:
-                raise serializers.ValidationError(
-                    {
-                        "status": "Cannot publish a video that has no source file (WebTV mode disabled)."
-                    }
+                    {"status": "Cannot publish a video that has no source file."}
                 )
         return attrs
 

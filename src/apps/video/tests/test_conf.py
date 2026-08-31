@@ -48,3 +48,12 @@ class VideoSettingsTests(SimpleTestCase):
 
             config = VideoConfig()
             self.assertFalse(config.hide_user_filter)
+
+    def test_constants_import(self):
+        """Test that video constants can be imported and are formatted correctly."""
+        from src.apps.video import constants
+
+        self.assertIsNotNone(constants.NOTES_STATUS)
+        self.assertIsNotNone(constants.CURSUS_CODES)
+        self.assertIsNotNone(constants.SOCIAL_SHARE)
+        self.assertIsNotNone(constants.LANG_CHOICES)
